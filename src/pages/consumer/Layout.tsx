@@ -401,7 +401,7 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
         />
       </div>
       {renderMobileSheet()}
-      {renderDestinationsSheet()}
+      {destinationsOpen && renderDestinationsSheet()}
 
       {/* Mobile header only visible below xl */}
       <div className="lg:hidden" aria-hidden={mobileOpen}>

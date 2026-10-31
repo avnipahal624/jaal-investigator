@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { DatabaseReader } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { getOwner } from "./lib/backend";
+import {
+  getOwner,
+  AI_RATE_WINDOW_MS,
+  AI_RATE_MAX,
+} from "./lib/backend";
 
 // ---------------------------------------------------------------------------
 // Consumer category → investigation title + scam category mapping.
@@ -170,6 +174,50 @@ export const getConsumerEvidence = query({
         notes: e.notes,
         createdAt: e.createdAt,
       }));
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Safety Assistant (chat) — per-owner AI rate limit
+// ---------------------------------------------------------------------------
+
+/**
+ * Consume one unit of the owner's AI budget for a Safety Assistant chat turn.
+ * Reuses the existing `ai_requests` rolling-window table with a sentinel
+ * `caseId` so chat shares the same per-owner budget as the other AI modules
+ * (a consumer chat is not tied to any investigation). Throws when the owner
+ * is over budget; the action surfaces that as an honest error.
+ */
+export const recordAssistantRequest = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const owner = await getOwner(ctx);
+    const now = Date.now();
+    const cutoff = now - AI_RATE_WINDOW_MS;
+    const recent = await ctx.db
+      .query("ai_requests")
+      .withIndex("by_owner_at", (q) => q.eq("owner", owner).gte("at", cutoff))
+      .collect();
+    if (recent.length >= AI_RATE_MAX) {
+      throw new Error(
+        `AI rate limit exceeded — at most ${AI_RATE_MAX} requests per ${
+          AI_RATE_WINDOW_MS / 1000
+        }s. Wait a moment before asking again.`,
+      );
+    }
+    await ctx.db.insert("ai_requests", {
+      owner,
+      caseId: "assistant",
+      kind: "assistant",
+      at: now,
+    });
+    // Opportunistic sweep so the table stays bounded.
+    const stale = await ctx.db
+      .query("ai_requests")
+      .withIndex("by_owner_at", (q) => q.eq("owner", owner).lt("at", now - 3_600_000))
+      .take(50);
+    for (const row of stale) await ctx.db.delete(row._id);
+    return { allowed: true };
   },
 });
 

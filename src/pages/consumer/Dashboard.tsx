@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import Assistant from "./Assistant";
 
 export default function ConsumerDashboardPage() {
   const dashboard = useQuery(api.consumer.consumerDashboard);
@@ -391,6 +392,9 @@ export default function ConsumerDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* JAAL Safety Assistant — floating chat (fixed-positioned, no layout impact) */}
+      <Assistant />
     </div>
   );
 }
