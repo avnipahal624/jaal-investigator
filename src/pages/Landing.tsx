@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   Siren,
   Terminal,
+  Users,
 } from "lucide-react";
 import { Link } from "react-router";
 
@@ -104,6 +105,12 @@ export default function Landing() {
           <div className="flex items-center gap-2">
             <Link
               to="/auth"
+              className="border border-[var(--color-consumer-primary)]/60 bg-[var(--color-consumer-primary)]/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--color-consumer-primary)] transition-colors hover:bg-[var(--color-consumer-primary)]/20"
+            >
+              Report a scam
+            </Link>
+            <Link
+              to="/auth"
               className="hidden border border-jborder/70 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-jmuted transition-colors hover:border-jcyan/50 hover:text-jcyan sm:block"
             >
               Account sign-in
@@ -154,6 +161,12 @@ export default function Landing() {
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
+              <Link
+                to="/auth"
+                className="flex h-11 items-center gap-2 bg-[var(--color-consumer-primary)] px-5 font-semibold text-white transition-colors hover:bg-[var(--color-consumer-primary)]/85"
+              >
+                <Users className="size-4" /> I'm a normal person — Report a scam
+              </Link>
               <a
                 href="#workflow"
                 className="flex h-11 items-center gap-2 border border-jborder/70 px-4 font-mono text-[11px] uppercase tracking-wider text-jmuted transition-colors hover:border-jcyan/50 hover:text-jcyan"
@@ -242,6 +255,84 @@ export default function Landing() {
               <p className="text-jgreen">[09:15:03] SHA-256 hash generated ▌</p>
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Two experiences */}
+      <section id="experiences" className="border-t border-jborder/60 bg-jsurface/40">
+        <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6">
+          <motion.div {...fadeUp} className="text-center">
+            <p className="jaal-label">Choose your experience</p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-jtext sm:text-3xl">
+              Two ways to use JAAL
+            </h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-jmuted">
+              JAAL serves two audiences. Pick the one that fits what you need
+              right now.
+            </p>
+          </motion.div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
+            {/* Normal People */}
+            <motion.div
+              {...fadeUp}
+              className="jaal-panel relative overflow-hidden p-6 transition-colors hover:border-[var(--color-consumer-primary)]/60"
+            >
+              <span className="inline-flex items-center gap-1.5 border border-[var(--color-consumer-primary)]/50 bg-[var(--color-consumer-primary)]/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-[var(--color-consumer-primary)]">
+                <span className="size-1.5 bg-[var(--color-consumer-primary)] jaal-pulse" /> Normal People
+              </span>
+              <Users className="mt-4 size-6 text-[var(--color-consumer-primary)]" />
+              <h3 className="mt-3 text-lg font-semibold text-jtext">
+                Report a scam in plain language
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-jmuted">
+                Worried about a suspicious message? Describe what happened in
+                everyday words. JAAL checks for warning signs and gives you
+                practical next steps — no jargon, no judgment.
+              </p>
+              <ul className="mt-4 flex flex-col gap-1.5 text-[13px] text-jmuted">
+                <li>• 3-step report in plain language</li>
+                <li>• Clear warning signs, explained</li>
+                <li>• Practical advice for staying safe</li>
+              </ul>
+              <Link
+                to="/auth"
+                className="mt-5 inline-flex h-11 items-center gap-2 bg-[var(--color-consumer-primary)] px-5 font-semibold text-white transition-colors hover:bg-[var(--color-consumer-primary)]/85"
+              >
+                Report a scam <ArrowRight className="size-4" />
+              </Link>
+            </motion.div>
+
+            {/* Investigator */}
+            <motion.div
+              {...fadeUp}
+              className="jaal-panel relative overflow-hidden p-6 transition-colors hover:border-jcyan/50"
+            >
+              <span className="inline-flex items-center gap-1.5 border border-jcyan/50 bg-jcyan/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-jcyan">
+                <span className="size-1.5 bg-jcyan jaal-pulse" /> Investigator
+              </span>
+              <Terminal className="mt-4 size-6 text-jcyan" />
+              <h3 className="mt-3 text-lg font-semibold text-jtext">
+                Forensic investigation console
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-jmuted">
+                Run controlled decoy conversations, track the scam kill-chain
+                live, extract suspicious identifiers and seal evidence with
+                SHA-256 integrity hashes.
+              </p>
+              <ul className="mt-4 flex flex-col gap-1.5 text-[13px] text-jmuted">
+                <li>• Kill-chain & tactic detection</li>
+                <li>• Evidence locker with SHA-256</li>
+                <li>• Structured forensic reports</li>
+              </ul>
+              <Link
+                to={primaryHref}
+                className="mt-5 inline-flex h-11 items-center gap-2 bg-jcyan px-5 font-semibold text-background transition-colors hover:bg-jcyan/85"
+              >
+                Open the console <ArrowRight className="size-4" />
+              </Link>
+            </motion.div>
+          </div>
         </div>
       </section>
 
