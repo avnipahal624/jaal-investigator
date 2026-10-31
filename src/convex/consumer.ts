@@ -1,20 +1,13 @@
-"use node";
-
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { requireOwner } from "./jaal";
-import { docToInvestigation, assertLength, MAX_TITLE_LENGTH, MAX_NOTES_LENGTH } from "./lib/backend";
-import { buildAliasIndex } from "./lib/intelligence";
-import { severityCounts } from "./lib/intelligenceSchemas";
-import { saveCorrelationSuggestions, deriveCorrelations, appendCopilotTurn, logAnalysis } from "./intelligence";
+import { getOwner } from "./lib/backend";
+import {
+  docToInvestigation,
+} from "./lib/backend";
 
 // ---------------------------------------------------------------------------
 // Consumer category → investigation title + short description mapping.
-// Kept deliberately simple: every consumer category becomes an investigation
-// whose category field matches one of the existing SCAM_CATEGORIES values so
-// the existing evidence/extraction pipeline and the existing reports surface
-// work unchanged.
 // ---------------------------------------------------------------------------
 
 export const CONSUMER_CATEGORIES = [
@@ -51,25 +44,22 @@ const CONSUMER_CATEGORY_CATEGORY: Record<ConsumerCategoryKey, string> = {
 export const consumerDashboard = query({
   args: {},
   handler: async (ctx) => {
-    const owner = await requireOwner(ctx);
+    const owner = await getOwner(ctx);
     const invDocs = await ctx.db
       .query("investigations")
       .withIndex("by_owner", (q) => q.eq("owner", owner))
       .collect();
 
     const total = invDocs.length;
-    const underReview = invDocs.filter(
-      (d) => d.status === "active" || d.status === "completed",
+    const underReview = invDocs.filter((d) =>
+      d.status === "active" || d.status === "completed",
     ).length;
     const completed = invDocs.filter((d) => d.status === "completed").length;
 
     const recent = invDocs
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, 6)
-      .map((d) => ({
-        ...docToInvestigation(d),
-        evidenceCount: 0,
-      }));
+      .map((d) => ({ ...docToInvestigation(d), evidenceCount: 0 }));
 
     let evidenceCount = 0;
     for (const inv of invDocs) {
@@ -96,7 +86,7 @@ export const consumerDashboard = query({
 export const consumerReports = query({
   args: {},
   handler: async (ctx) => {
-    const owner = await requireOwner(ctx);
+    const owner = await getOwner(ctx);
     const docs = await ctx.db
       .query("investigations")
       .withIndex("by_owner", (q) => q.eq("owner", owner))
@@ -119,11 +109,11 @@ export const consumerReports = query({
  * evidence rows (never executed, never opened).
  *
  * Returns the created investigation (as docToInvestigation) plus the evidence
- * ids attached.
+ * count attached.
  */
 export const createConsumerReport = mutation({
   args: {
-    category: v.string(), // one of CONSUMER_CATEGORY_KEY values
+    category: v.string(),
     messageText: v.optional(v.string()),
     conversationText: v.optional(v.string()),
     phoneNumber: v.optional(v.string()),
@@ -138,7 +128,7 @@ export const createConsumerReport = mutation({
     attachmentText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const owner = await requireOwner(ctx);
+    const owner = await getOwner(ctx);
     const category = args.category as ConsumerCategoryKey | undefined;
     if (!category || !CONSUMER_CATEGORY_TITLE[category]) {
       throw new Error("Invalid report category.");
@@ -147,8 +137,7 @@ export const createConsumerReport = mutation({
     const title = CONSUMER_CATEGORY_TITLE[category];
     const scamCategory = CONSUMER_CATEGORY_CATEGORY[category];
 
-    // Build a short description from the fields the consumer actually provided,
-    // so the existing reports/summary services have something to work with.
+    // Build a short description from the fields the consumer actually provided.
     const parts: string[] = [];
     if (args.messageText) parts.push("Message provided.");
     if (args.conversationText) parts.push("Conversation provided.");
@@ -169,6 +158,8 @@ export const createConsumerReport = mutation({
       .collect();
     const caseId = `JAAL-${String(existing.length + 1).padStart(3, "0")}`;
 
+    const now = Date.now();
+
     const invId = await ctx.db.insert("investigations", {
       caseId,
       owner,
@@ -177,7 +168,7 @@ export const createConsumerReport = mutation({
       description,
       notes: "",
       status: "active",
-      source: "consumer",
+      source: "import",
       detectionMode: "manual",
       flags: {
         tacticDetection: false,
@@ -186,25 +177,24 @@ export const createConsumerReport = mutation({
         aiSuggestions: false,
       },
       currentStage: "contact",
-      createdAt: Date.now(),
-      lastActivityAt: Date.now(),
-      completedAt: null,
+      createdAt: now,
+      lastActivityAt: now,
+      completedAt: undefined,
       runStatus: "paused",
-      startedAt: Date.now(),
-      endedAt: null,
+      startedAt: now,
+      endedAt: undefined,
       cursor: 0,
       turnCount: 0,
-      stages: [],
+      stages: undefined as undefined,
       schemaVersion: 1,
     });
 
-    const now = Date.now();
     const attached: Id<"evidence">[] = [];
 
     // Attach any identifiers the consumer provided as evidence rows so they are
     // preserved and hashable. Treat all supplied text as untrusted — store the
     // verbatim value, never execute links or phone-dial.
-    const attach = (
+    const attach = async (
       label: string,
       evidenceType: string,
       value: string,
@@ -214,7 +204,7 @@ export const createConsumerReport = mutation({
         investigationId: invId,
         owner,
         caseId,
-        sourceMessageId: null,
+        sourceMessageId: undefined,
         sourceMessageText: sourceText,
         label,
         evidenceType,
@@ -223,22 +213,22 @@ export const createConsumerReport = mutation({
         content: value,
         extractionMethod: "CONSUMER_PROVIDED",
         extractionTimestamp: now,
-        confidence: null,
-        integrityHash: null,
-        integrityAlgorithm: null,
+        confidence: undefined,
+        integrityHash: undefined,
+        integrityAlgorithm: undefined,
         integrityStatus: "NOT_HASHED",
-        hashGeneratedAt: null,
+        hashGeneratedAt: undefined,
         notes: "Provided by the reporter. Not independently verified.",
-        tampered: null,
+        tampered: undefined,
         originalContent: value,
-        contentHistory: null,
-        hashHistory: null,
-        verificationHistory: null,
-        manifest: null,
-        manifestHash: null,
-        reviewStatus: null,
-        reviewNote: null,
-        reviewedAt: null,
+        contentHistory: undefined,
+        hashHistory: undefined,
+        verificationHistory: undefined,
+        manifest: undefined,
+        manifestHash: undefined,
+        reviewStatus: undefined,
+        reviewNote: undefined,
+        reviewedAt: undefined,
         createdAt: now,
       });
       attached.push(id as Id<"evidence">);
@@ -282,97 +272,3 @@ export const createConsumerReport = mutation({
   },
 });
 
-// ---------------------------------------------------------------------------
-// Consumer-facing AI assessment trigger (threat analysis)
-// ---------------------------------------------------------------------------
-
-/**
- * Queue a threat analysis for a consumer report.
- *
- * Reuses the existing intelligence lifecycle (beginAnalysis + the threat
- * module action). The caller must own the investigation. Returns the current
- * analysis view so the UI can show NOT_STARTED/PROCESSING/COMPLETED/FAILED/
- * UNAVAILABLE without polling a second endpoint.
- *
- * NOTE: the actual provider call is gated by ANTHROPIC_API_KEY on the
- * deployment. If the key is absent the module writes UNAVAILABLE with an
- * honest limitation — consumers see "Unable to assess", never a fabricated
- * result.
- */
-export const runConsumerAnalysis = mutation({
-  args: {
-    caseId: v.string(),
-    force: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    const owner = await requireOwner(ctx);
-    const inv = await ctx.db
-      .query("investigations")
-      .withIndex("by_owner_case", (q) =>
-        q.eq("owner", owner).eq("caseId", args.caseId),
-      )
-      .unique();
-    if (!inv) throw new Error("Report not found.");
-
-    // Consumer reports have no conversation, so the threat module would
-    // normally return an empty-case response. For a consumer report we
-    // instead run the analysis against the evidence the consumer attached,
-    // which is exactly what "explain possible warning signs from the
-    // submitted content" wants.
-    const evidenceDocs = await ctx.db
-      .query("evidence")
-      .withIndex("by_investigation", (q) =>
-        q.eq("investigationId", inv._id),
-      )
-      .collect();
-
-    const aliasIndex = buildAliasIndex(
-      [],
-      evidenceDocs.map((e) => ({
-        alias: `E${evidenceDocs.indexOf(e) + 1}`,
-        id: e._id,
-        kind: "evidence",
-        label: e.label,
-        value: e.extractedValue,
-        sourceMessageText: e.sourceMessageText,
-      })),
-    );
-
-    const fingerprint = await ctx.runQuery(api.intelligence.caseContext, {
-      caseId: args.caseId,
-    }).then((ctx) => ctx.fingerprint);
-
-    // Trigger the existing threat module action — it owns the whole lifecycle.
-    // We do not await the action result here; the client polls analyses().
-    await ctx.runAction(api.intelligenceActions.threatAnalysisAction, {
-      caseId: args.caseId,
-      force: args.force ?? false,
-    });
-
-    const analysisRow = await ctx.db
-      .query("ai_analyses")
-      .withIndex("by_case_module", (q) =>
-        q.eq("investigationId", inv._id).eq("module", "threat"),
-      )
-      .unique();
-
-    return {
-      queued: true,
-      fingerprint,
-      analysis: analysisRow
-        ? {
-            ...analysisRow,
-            fingerprint: analysisRow.fingerprint,
-            stale: false,
-            inputMessageCount: analysisRow.inputMessageCount,
-            provider: analysisRow.provider ?? null,
-            model: analysisRow.model ?? null,
-            limitations: analysisRow.limitations,
-            error: analysisRow.error ?? null,
-            durationMs: analysisRow.durationMs ?? null,
-            at: analysisRow.at,
-          }
-        : null,
-    };
-  },
-});
