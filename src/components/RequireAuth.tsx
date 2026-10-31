@@ -21,6 +21,36 @@ import { Navigate, useLocation, useNavigate } from "react-router";
  * still returns them to it via `returnTo`. Pass `redirectImmediately` for a
  * route where the bounce really is the better experience.
  */
+export function RequireConsumer({
+  children,
+  title = "Normal People sign-in required",
+  description = "This section is for the Normal People experience. Investigators sign in through the investigator console.",
+}: {
+  children: ReactNode;
+  title?: string;
+  description?: string;
+}) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+
+  // Authentication first, then the consumer-role check.
+  if (isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </main>
+    );
+  }
+
+  if (!isAuthenticated) {
+    const returnTo = `${location.pathname}${location.search}`;
+    const signInHref = `/auth?returnTo=${encodeURIComponent(returnTo)}`;
+    return <Navigate to={signInHref} replace />;
+  }
+
+  return children;
+}
+
 export function RequireAuth({
   children,
   title = "Sign in to continue",

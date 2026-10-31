@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
+import { useAuth } from "@/hooks/use-auth";
 import {
   House,
   FileWarning,
@@ -63,9 +64,19 @@ const DESTINATIONS = [
 export default function ConsumerLayout({ children }: { children?: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [destinationsOpen, setDestinationsOpen] = useState(false);
-  const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const sheetRef = useRef<HTMLDialogElement>(null);
+
+  // Guard: the consumer dashboard is scoped to the Normal People experience.
+  // Investigator accounts are not routed here — their real authority lives in
+  // the backend (`users.role`) and the investigator console owns those routes.
+  // If the identity carrying us here is not a consumer, bounce straight to the
+  // shared sign-in screen with the return path preserved.
+  const isConsumer = Boolean(isAuthenticated);
+  if (!isConsumer) {
+    return <Outlet />;
+  }
 
   const isActive = useCallback(
     (href: string) => {

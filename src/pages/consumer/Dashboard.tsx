@@ -1,5 +1,9 @@
 import { useQuery } from "convex/react";
 import { Link } from "react-router";
+
+// Pre-computed slider offsets used to position floating consumer controls
+// without overlapping the fixed header / sidebar.
+const LAUNCHER_BOTTOM_OFFSET = 180;
 import {
   MessageSquare,
   Phone,

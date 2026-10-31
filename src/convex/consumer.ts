@@ -8,6 +8,8 @@ import {
   AI_RATE_MAX,
 } from "./lib/backend";
 
+export const CONSUMER_ROLE = "consumer";
+
 // ---------------------------------------------------------------------------
 // Consumer category → investigation title + scam category mapping.
 // ---------------------------------------------------------------------------
@@ -83,6 +85,10 @@ async function countEvidence(
 export const consumerDashboard = query({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || identity.role !== CONSUMER_ROLE) {
+      throw new Error("Consumer access restricted to Normal People accounts.");
+    }
     const owner = await getOwner(ctx);
     const invDocs = await ctx.db
       .query("investigations")
@@ -122,6 +128,10 @@ export const consumerDashboard = query({
 export const consumerReports = query({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || identity.role !== CONSUMER_ROLE) {
+      throw new Error("Consumer access restricted to Normal People accounts.");
+    }
     const owner = await getOwner(ctx);
     const docs = await ctx.db
       .query("investigations")
@@ -141,14 +151,19 @@ export const consumerReports = query({
  * Evidence rows attached to a consumer report (owner-scoped).
  *
  * `investigationId` is the Convex document `_id` of the investigation. We load
- * the doc directly and verify the caller owns it before returning anything —
- * cross-user access is rejected exactly like the rest of the JAAL backend.
+ * the doc directly and verify the caller owns it and is a consumer before
+ * returning anything — cross-user access is rejected exactly like the rest of
+ * the JAAL backend.
  */
 export const getConsumerEvidence = query({
   args: {
     investigationId: v.id("investigations"),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || identity.role !== CONSUMER_ROLE) {
+      throw new Error("Consumer access restricted to Normal People accounts.");
+    }
     const owner = await getOwner(ctx);
     const inv = await ctx.db.get(args.investigationId);
     if (!inv || inv.owner !== owner) {

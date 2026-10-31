@@ -1,6 +1,6 @@
 import '@vly-ai/integrations';
 import { Toaster } from "@/components/ui/sonner";
-import { RequireAuth } from "@/components/RequireAuth";
+import { RequireAuth, RequireConsumer } from "@/components/RequireAuth";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { AppShell } from "@/components/layout/AppShell";
 import { JaalProvider } from "@/state/JaalProvider";
@@ -195,7 +195,9 @@ createRoot(document.getElementById("root")!).render(
                   <Route
                     element={
                       <RequireAuth>
-                        <ConsumerLayout />
+                        <RequireConsumer>
+                          <ConsumerLayout />
+                        </RequireConsumer>
                       </RequireAuth>
                     }
                   >
