@@ -1,11 +1,10 @@
 import { useQuery } from "convex/react";
-import { useState } from "react";
 import { Link } from "react-router";
 import {
   MessageSquare,
   Phone,
   Receipt,
-  Link,
+  LinkIcon,
   HelpCircle,
   ArrowRight,
   Clock,
@@ -17,21 +16,11 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import type { ConsumerDashboardSummary, ConsumerReportView } from "@/types/consumer";
 
 export default function ConsumerDashboardPage() {
-  const dashboardQuery = useQuery(api.consumer.consumerDashboard);
-  const [loading, setLoading] = useState(dashboardQuery === undefined);
-
-  useEffect(() => {
-    if (dashboardQuery !== undefined) {
-      setLoading(false);
-    }
-  }, [dashboardQuery]);
-
-  const dashboard: ConsumerDashboardSummary | null =
-    dashboardQuery ?? null;
-  const recent: ConsumerReportView[] = dashboard?.recent ?? [];
+  const dashboard = useQuery(api.consumer.consumerDashboard);
+  const loading = dashboard === undefined;
+  const recent = dashboard?.recent ?? [];
 
   const formatDate = (ts?: number | null) => {
     if (!ts) return "—";
@@ -202,7 +191,7 @@ export default function ConsumerDashboardPage() {
                 {
                   key: "link",
                   label: "Suspicious Link",
-                  icon: Link,
+                  icon: LinkIcon,
                   to: "/consumer/report?category=link",
                 },
                 {
@@ -254,12 +243,9 @@ export default function ConsumerDashboardPage() {
 
             <div className="space-y-3">
               {loading ? (
-                <div className="space-y-3">
+                <div className="space-y-3" aria-busy="true">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="glass p-4 space-y-2 animate-pulse"
-                    >
+                    <div key={i} className="glass p-4 space-y-2 animate-pulse">
                       <div className="flex items-center justify-between">
                         <span className="h-4 w-24 bg-[var(--color-consumer-border)] rounded" />
                         <span className="h-4 w-16 bg-[var(--color-consumer-border)] rounded" />
@@ -270,14 +256,12 @@ export default function ConsumerDashboardPage() {
                       </div>
                     </div>
                   ))}
+                  <span className="sr-only">Loading recent reports…</span>
                 </div>
-              ) : emptyRecent ?? (
-                <div className="space-y-3">
-                  {recent.slice(0, 5).map((report) => {
-                    const category =
-                      (report.category as string) ??
-                      "Other";
-                    return (
+              ) : (
+                emptyRecent ?? (
+                  <div className="space-y-3">
+                    {recent.slice(0, 5).map((report) => (
                       <Link
                         key={report._id}
                         to={`/consumer/reports/${report._id}`}
@@ -289,7 +273,7 @@ export default function ConsumerDashboardPage() {
                               {report.caseId ?? "—"}
                             </p>
                             <p className="text-sm text-[var(--color-consumer-muted)] mt-0.5">
-                              {category}
+                              {report.category ?? "Other"}
                             </p>
                           </div>
                           <span className="text-xs text-[var(--color-consumer-muted)] whitespace-nowrap">
@@ -307,9 +291,9 @@ export default function ConsumerDashboardPage() {
                           </span>
                         </div>
                       </Link>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           </section>

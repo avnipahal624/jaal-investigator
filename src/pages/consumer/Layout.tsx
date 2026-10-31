@@ -76,7 +76,7 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
   );
 
   const closeOnOutside = useCallback(
-    (event: MouseEvent) => {
+    (event: React.MouseEvent<HTMLElement>) => {
       const target = event.target as Node | null;
       if (target && !sheetRef.current?.contains(target)) {
         setMobileOpen(false);

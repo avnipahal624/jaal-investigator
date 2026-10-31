@@ -1,13 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { DatabaseReader } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { getOwner } from "./lib/backend";
-import {
-  docToInvestigation,
-} from "./lib/backend";
 
 // ---------------------------------------------------------------------------
-// Consumer category → investigation title + short description mapping.
+// Consumer category → investigation title + scam category mapping.
 // ---------------------------------------------------------------------------
 
 export const CONSUMER_CATEGORIES = [
@@ -18,7 +16,8 @@ export const CONSUMER_CATEGORIES = [
   { key: "other", label: "Something Else", icon: "other" },
 ] as const;
 
-export type ConsumerCategoryKey = (typeof CONSUMER_CATEGORIES)[number]["key"];
+export type ConsumerCategoryKey =
+  (typeof CONSUMER_CATEGORIES)[number]["key"];
 
 const CONSUMER_CATEGORY_TITLE: Record<ConsumerCategoryKey, string> = {
   message: "Suspicious message",
@@ -36,8 +35,44 @@ const CONSUMER_CATEGORY_CATEGORY: Record<ConsumerCategoryKey, string> = {
   other: "Other",
 };
 
+/**
+ * Consumer-safe view of one report. Exposes only what a reporter should see:
+ * reference, category, title, description, submission date, status, evidence
+ * count. Never exposes owner, notes, investigator-only fields or internal
+ * correlation data.
+ */
+function toConsumerReport(
+  doc: Doc<"investigations">,
+  evidenceCount = 0,
+) {
+  return {
+    _id: doc._id as string,
+    caseId: doc.caseId,
+    category: doc.category,
+    title: doc.title,
+    description: doc.description,
+    createdAt: doc.createdAt,
+    lastActivityAt: doc.lastActivityAt,
+    status: doc.status,
+    evidenceCount,
+  };
+}
+
+async function countEvidence(
+  db: DatabaseReader,
+  investigationId: Id<"investigations">,
+): Promise<number> {
+  const items = await db
+    .query("evidence")
+    .withIndex("by_investigation", (q) =>
+      q.eq("investigationId", investigationId),
+    )
+    .collect();
+  return items.length;
+}
+
 // ---------------------------------------------------------------------------
-// Dashboard + list surfaces (read-only, owner-scoped, reuse jaal.)
+// Dashboard + list surfaces (read-only, owner-scoped, reuse jaal tables).
 // ---------------------------------------------------------------------------
 
 /** Consumer dashboard summary — real counts from the owner's records. */
@@ -51,25 +86,22 @@ export const consumerDashboard = query({
       .collect();
 
     const total = invDocs.length;
-    const underReview = invDocs.filter((d) =>
-      d.status === "active" || d.status === "completed",
+    const underReview = invDocs.filter(
+      (d) => d.status === "active" || d.status === "completed",
     ).length;
     const completed = invDocs.filter((d) => d.status === "completed").length;
 
-    const recent = invDocs
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, 6)
-      .map((d) => ({ ...docToInvestigation(d), evidenceCount: 0 }));
+    const sorted = [...invDocs].sort((a, b) => b.createdAt - a.createdAt);
+    const recent = await Promise.all(
+      sorted.slice(0, 6).map(async (d) => {
+        const evidenceCount = await countEvidence(ctx.db, d._id);
+        return toConsumerReport(d, evidenceCount);
+      }),
+    );
 
     let evidenceCount = 0;
     for (const inv of invDocs) {
-      const items = await ctx.db
-        .query("evidence")
-        .withIndex("by_investigation", (q) =>
-          q.eq("investigationId", inv._id),
-        )
-        .collect();
-      evidenceCount += items.length;
+      evidenceCount += await countEvidence(ctx.db, inv._id);
     }
 
     return {
@@ -82,63 +114,6 @@ export const consumerDashboard = query({
   },
 });
 
-/** Evidence rows attached to a consumer report (owner-scoped). */
-export const getConsumerEvidence = query({
-  args: {
-    investigationId: v.id("investigations"),
-  },
-  handler: async (ctx, args) => {
-    const owner = await getOwner(ctx);
-    const inv = await ctx.db
-      .query("investigations")
-      .withIndex("by_owner_case", (q) =>
-        q.eq("owner", owner).eq("caseId", args.investigationId),
-      )
-      .unique();
-    if (!inv) return [];
-    const rows = await ctx.db
-      .query("evidence")
-      .withIndex("by_investigation", (q) =>
-        q.eq("investigationId", inv._id),
-      )
-      .collect();
-    return rows
-      .filter((e) => e.owner === owner)
-      .map((e) => ({
-        _id: e._id,
-        investigationId: e.investigationId,
-        owner: e.owner,
-        caseId: e.caseId,
-        sourceMessageId: e.sourceMessageId,
-        sourceMessageText: e.sourceMessageText,
-        label: e.label,
-        evidenceType: e.evidenceType,
-        extractedValue: e.extractedValue,
-        normalizedValue: e.normalizedValue,
-        content: e.content,
-        extractionMethod: e.extractionMethod,
-        extractionTimestamp: e.extractionTimestamp,
-        confidence: e.confidence,
-        integrityHash: e.integrityHash,
-        integrityAlgorithm: e.integrityAlgorithm,
-        integrityStatus: e.integrityStatus,
-        hashGeneratedAt: e.hashGeneratedAt,
-        notes: e.notes,
-        tampered: e.tampered,
-        originalContent: e.originalContent,
-        contentHistory: e.contentHistory,
-        hashHistory: e.hashHistory,
-        verificationHistory: e.verificationHistory,
-        manifest: e.manifest,
-        manifestHash: e.manifestHash,
-        reviewStatus: e.reviewStatus,
-        reviewNote: e.reviewNote,
-        reviewedAt: e.reviewedAt,
-        createdAt: e.createdAt,
-      }));
-  },
-});
-
 /** Flat list of a consumer's reports (investigations) newest first. */
 export const consumerReports = query({
   args: {},
@@ -148,9 +123,53 @@ export const consumerReports = query({
       .query("investigations")
       .withIndex("by_owner", (q) => q.eq("owner", owner))
       .collect();
-    return docs
-      .map((d) => docToInvestigation(d))
-      .sort((a, b) => b.createdAt - a.createdAt);
+    const sorted = [...docs].sort((a, b) => b.createdAt - a.createdAt);
+    return Promise.all(
+      sorted.map(async (d) => {
+        const evidenceCount = await countEvidence(ctx.db, d._id);
+        return toConsumerReport(d, evidenceCount);
+      }),
+    );
+  },
+});
+
+/**
+ * Evidence rows attached to a consumer report (owner-scoped).
+ *
+ * `investigationId` is the Convex document `_id` of the investigation. We load
+ * the doc directly and verify the caller owns it before returning anything —
+ * cross-user access is rejected exactly like the rest of the JAAL backend.
+ */
+export const getConsumerEvidence = query({
+  args: {
+    investigationId: v.id("investigations"),
+  },
+  handler: async (ctx, args) => {
+    const owner = await getOwner(ctx);
+    const inv = await ctx.db.get(args.investigationId);
+    if (!inv || inv.owner !== owner) {
+      // Either not found, or not owned by the caller — return nothing.
+      return [];
+    }
+    const rows = await ctx.db
+      .query("evidence")
+      .withIndex("by_investigation", (q) =>
+        q.eq("investigationId", inv._id),
+      )
+      .collect();
+    return rows
+      .filter((e) => e.owner === owner)
+      .map((e) => ({
+        _id: e._id as string,
+        label: e.label,
+        evidenceType: e.evidenceType,
+        extractedValue: e.extractedValue,
+        content: e.content,
+        sourceMessageText: e.sourceMessageText,
+        integrityStatus: e.integrityStatus,
+        notes: e.notes,
+        createdAt: e.createdAt,
+      }));
   },
 });
 
@@ -165,8 +184,8 @@ export const consumerReports = query({
  * the details they have; optional screenshot/attachment text is stored as
  * evidence rows (never executed, never opened).
  *
- * Returns the created investigation (as docToInvestigation) plus the evidence
- * count attached.
+ * Returns the created report (consumer-safe view) plus the evidence count
+ * attached.
  */
 export const createConsumerReport = mutation({
   args: {
@@ -236,32 +255,24 @@ export const createConsumerReport = mutation({
       currentStage: "contact",
       createdAt: now,
       lastActivityAt: now,
-      completedAt: undefined,
       runStatus: "paused",
       startedAt: now,
-      endedAt: undefined,
       cursor: 0,
       turnCount: 0,
-      stages: undefined as undefined,
+      stages: undefined,
       schemaVersion: 1,
     });
 
-    const attached: Id<"evidence">[] = [];
-
-    // Attach any identifiers the consumer provided as evidence rows so they are
-    // preserved and hashable. Treat all supplied text as untrusted — store the
-    // verbatim value, never execute links or phone-dial.
     const attach = async (
       label: string,
       evidenceType: string,
       value: string,
       sourceText: string,
     ) => {
-      const id = await ctx.db.insert("evidence", {
+      await ctx.db.insert("evidence", {
         investigationId: invId,
         owner,
         caseId,
-        sourceMessageId: undefined,
         sourceMessageText: sourceText,
         label,
         evidenceType,
@@ -270,62 +281,48 @@ export const createConsumerReport = mutation({
         content: value,
         extractionMethod: "CONSUMER_PROVIDED",
         extractionTimestamp: now,
-        confidence: undefined,
-        integrityHash: undefined,
-        integrityAlgorithm: undefined,
         integrityStatus: "NOT_HASHED",
-        hashGeneratedAt: undefined,
         notes: "Provided by the reporter. Not independently verified.",
-        tampered: undefined,
         originalContent: value,
-        contentHistory: undefined,
-        hashHistory: undefined,
-        verificationHistory: undefined,
-        manifest: undefined,
-        manifestHash: undefined,
-        reviewStatus: undefined,
-        reviewNote: undefined,
-        reviewedAt: undefined,
         createdAt: now,
       });
-      attached.push(id as Id<"evidence">);
     };
 
     if (args.messageText) {
-      attach("Message", "scam_message", args.messageText, "Reporter-provided message text.");
+      await attach("Message", "scam_message", args.messageText, "Reporter-provided message text.");
     }
     if (args.conversationText) {
-      attach("Conversation", "transcript", args.conversationText, "Reporter-provided conversation.");
+      await attach("Conversation", "transcript", args.conversationText, "Reporter-provided conversation.");
     }
     if (args.phoneNumber) {
-      attach("Phone number", "phone", args.phoneNumber, "Reporter-provided phone number.");
+      await attach("Phone number", "phone", args.phoneNumber, "Reporter-provided phone number.");
     }
     if (args.upiId) {
-      attach("UPI ID", "upi", args.upiId, "Reporter-provided UPI ID.");
+      await attach("UPI ID", "upi", args.upiId, "Reporter-provided UPI ID.");
     }
     if (args.paymentDetails) {
-      attach("Payment details", "payment_request", args.paymentDetails, "Reporter-provided payment details.");
+      await attach("Payment details", "payment_request", args.paymentDetails, "Reporter-provided payment details.");
     }
     if (args.amount) {
-      attach("Amount", "payment_request", args.amount, "Reporter-provided amount.");
+      await attach("Amount", "payment_request", args.amount, "Reporter-provided amount.");
     }
     if (args.url) {
-      attach("Link", "url", args.url, args.urlWhereReceived ?? "Reporter-provided link.");
+      await attach("Link", "url", args.url, args.urlWhereReceived ?? "Reporter-provided link.");
     }
     if (args.description) {
-      attach("Description", "other", args.description, "Reporter-provided description.");
+      await attach("Description", "other", args.description, "Reporter-provided description.");
     }
     if (args.attachmentText && args.attachmentLabel) {
-      attach(args.attachmentLabel, "other", args.attachmentText, "Reporter-provided attachment.");
+      await attach(args.attachmentLabel, "other", args.attachmentText, "Reporter-provided attachment.");
     }
 
     const inv = await ctx.db.get(invId);
     if (!inv) throw new Error("Report creation failed.");
 
+    const evidenceCount = await countEvidence(ctx.db, invId);
     return {
-      report: docToInvestigation(inv),
-      attachedEvidenceCount: attached.length,
+      report: toConsumerReport(inv, evidenceCount),
+      attachedEvidenceCount: evidenceCount,
     };
   },
 });
-

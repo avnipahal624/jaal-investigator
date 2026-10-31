@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useQuery } from "convex/react";
 import { Link, useParams } from "react-router";
+import type { Id } from "@/convex/_generated/dataModel";
 import {
   ArrowLeft,
   Calendar,
@@ -17,44 +18,36 @@ import {
   FileWarning,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import type { ConsumerReportView, ConsumerEvidenceView, ConsumerAnalysisView } from "@/types/consumer";
-
-
-/* eslint-disable react-hooks/set-state-in-effect -- data-fetch effect; state
-   updates happen only after the initial microtask yield, so the effect body
-   itself does not synchronously call setState. */
 
 const STATUS_LABEL: Record<string, { label: string; className: string }> = {
   active: { label: "Open", className: "text-[var(--color-consumer-primary)]" },
-  completed: { label: "Completed", className: "text-[var(--color-consumer-teal)]" },
-  paused: { label: "Waiting", className: "text-[var(--color-consumer-muted)]" },
-  closed: { label: "Closed", className: "text-[var(--color-consumer-muted)]" },
-};
-
-const ANALYSIS_LABEL: Record<string, { label: string; className: string }> = {
-  not_started: {
-    label: "Not yet analysed",
-    className: "text-[var(--color-consumer-muted)]",
-  },
-  processing: {
-    label: "Analysing...",
-    className: "text-[var(--color-consumer-primary)]",
-  },
   completed: {
-    label: "Analysed",
+    label: "Completed",
     className: "text-[var(--color-consumer-teal)]",
   },
-  failed: {
-    label: "Analysis failed",
-    className: "text-[var(--color-consumer-muted)]",
-  },
-  unavailable: {
-    label: "Analysis unavailable",
-    className: "text-[var(--color-consumer-muted)]",
-  },
+  archived: { label: "Archived", className: "text-[var(--color-consumer-muted)]" },
 };
 
-const EVIDENCE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+const ANALYSIS_LABEL: Record<string, string> = {
+  PROCESSING: "Analysing...",
+  COMPLETED: "Analysed",
+  FAILED: "Analysis failed",
+  UNAVAILABLE: "Analysis unavailable",
+};
+
+/** Map an AI finding category to a plain-language warning-sign title. */
+const FINDING_TITLE: Record<string, string> = {
+  SOCIAL_ENGINEERING: "Tries to manipulate you",
+  PSYCHOLOGICAL_MANIPULATION: "Uses pressure, fear or urgency",
+  FINANCIAL_MANIPULATION: "Asks for money or payment",
+  INFORMATION_EXTRACTION: "Asks for personal or account details",
+  CONVERSATION_BEHAVIOUR: "Unusual communication pattern",
+};
+
+const EVIDENCE_ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string; strokeWidth?: number }>
+> = {
   scam_message: MessageSquare,
   transcript: MessageSquare,
   phone: Phone,
@@ -67,40 +60,66 @@ const EVIDENCE_ICONS: Record<string, React.ComponentType<{ className?: string }>
 function evidenceIcon(type?: string | null) {
   const Icon = EVIDENCE_ICONS[type ?? ""] ?? HelpCircle;
   return <Icon className="w-4 h-4" strokeWidth={1.85} />;
-}export default function ConsumerReportDetailPage() {
+}
+
+/** Defensive extraction of the consumer-facing assessment from AI output. */
+function readThreatOutput(output: unknown): {
+  overview: string | null;
+  findings: { title: string; severity: string; explanation: string; action: string }[];
+  steps: string[];
+} {
+  if (!output || typeof output !== "object") {
+    return { overview: null, findings: [], steps: [] };
+  }
+  const o = output as {
+    overview?: unknown;
+    findings?: unknown;
+    recommendedSteps?: unknown;
+  };
+  const overview = typeof o.overview === "string" ? o.overview : null;
+  const findings = Array.isArray(o.findings)
+    ? o.findings
+        .filter((f): f is Record<string, unknown> => !!f && typeof f === "object")
+        .map((f) => ({
+          title:
+            typeof f.tactic === "string" && f.tactic
+              ? f.tactic
+              : (FINDING_TITLE[String(f.category ?? "")] ?? "Warning sign"),
+          severity: typeof f.severity === "string" ? f.severity : "",
+          explanation:
+            typeof f.explanation === "string" ? f.explanation : "",
+          action:
+            typeof f.recommendedAction === "string" ? f.recommendedAction : "",
+        }))
+        .filter((f) => f.explanation)
+    : [];
+  const steps = Array.isArray(o.recommendedSteps)
+    ? o.recommendedSteps.filter((s): s is string => typeof s === "string")
+    : [];
+  return { overview, findings, steps };
+}
+
+export default function ConsumerReportDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const reportId = id as Id<"investigations"> | undefined;
 
   const reportsQuery = useQuery(api.consumer.consumerReports);
   const evidenceQuery = useQuery(
     api.consumer.getConsumerEvidence,
-    id != null ? { investigationId: id } : undefined,
+    reportId ? { investigationId: reportId } : "skip",
   );
+
+  const report = reportsQuery?.find((r) => r._id === id) ?? null;
+  const caseId = report?.caseId ?? null;
   const analysisQuery = useQuery(
     api.intelligence.getAnalysis,
-    id != null
-      ? { caseId: id, module: "threat" }
-      : undefined,
+    caseId ? { caseId, module: "threat" } : "skip",
   );
 
-  const [loading, setLoading] = useState(
-    reportsQuery === undefined || evidenceQuery === undefined || analysisQuery === undefined,
-  );
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (reportsQuery !== undefined && evidenceQuery !== undefined && analysisQuery !== undefined) {
-      setLoading(false);
-    }
-  }, [reportsQuery, evidenceQuery, analysisQuery]);
-
-  const allReports: ConsumerReportView[] = reportsQuery ?? [];
-  const match: ConsumerReportView | undefined = allReports.find(
-    (r) => r._id === id || r.claimId === id,
-  );
-
-  const report: ConsumerReportView | null = match ?? null;
-  const attachments: ConsumerEvidenceView[] = (evidenceQuery ?? null) ?? [];
-  const analysis: ConsumerAnalysisView | null = (analysisQuery ?? null) ?? null;
+  const loading = reportsQuery === undefined;
+  const attachments = evidenceQuery ?? [];
+  const analysis = analysisQuery ?? null;
+  const threat = readThreatOutput(analysis?.output);
 
   const formatDate = (ts?: number | null) => {
     if (!ts) return "—";
@@ -115,78 +134,31 @@ function evidenceIcon(type?: string | null) {
     });
   };
 
-  const topCategory = report?.category as string | undefined;
-  const statusInfo = report ? STATUS_LABEL[report.status ?? ""] ?? STATUS_LABEL.active : STATUS_LABEL.active;
-  const analysisInfo =
-    analysis && analysis.status
-      ? ANALYSIS_LABEL[analysis.status.toLowerCase().replace(/[^a-z0-9]/g, "_")] ??
-        ANALYSIS_LABEL.not_started
-      : ANALYSIS_LABEL.not_started;
+  const statusInfo = report
+    ? STATUS_LABEL[report.status] ?? STATUS_LABEL.active
+    : STATUS_LABEL.active;
 
-  const warningSigns: { label: string; why: string }[] = [];
-  const recommendations: string[] = [];
+  const analysisLabel = analysis
+    ? ANALYSIS_LABEL[analysis.status] ?? "Not yet analysed"
+    : "Not yet analysed";
 
-  if (analysis && analysis.status === "completed") {
-    // Derive consumer-safe warning signs and recommendations from the stored
-    // output. The backend stores a grounded result; we map a few well-known
-    // labels to plain-language copy. If the output doesn't match a known
-    // label we show nothing — never invent.
-    const out = (analysis.output as string) ?? "";
-    const lower = out.toLowerCase();
-
-    if (lower.includes("high concern") || lower.includes("high risk")) {
-      warningSigns.push({
-        label: "This report has several warning signs",
-        why:
-          "The details you shared include patterns that often appear in scams. JAAL flagged these so you can check them carefully.",
-      });
-      recommendations.push(
-        "Do not share any OTP, PIN, password or banking details.",
-        "Verify the request using the organisation's official contact details, not the details in the message.",
-        "Do not click links or open attachments you were not expecting.",
-        "If money was already sent, contact your bank or payment provider right away and ask them to help.",
-        "Keep copies of the message, call details or link you reported.",
-      );
-    } else if (
-      lower.includes("warning sign") ||
-      lower.includes("warning signs")
-    ) {
-      warningSigns.push({
-        label: "Warning signs were found",
-        why:
-          "What you shared shows some patterns that can appear in scams. That does not prove anything happened — it just means it is worth checking carefully.",
-      });
-      recommendations.push(
-        "Pause before you act on anything the sender asked you to do.",
-        "Check the sender's details through an official channel.",
-        "Do not share personal or payment details unless you are sure.",
-        "If you are unsure, report it and wait before acting.",
-      );
-    } else if (
-      lower.includes("no obvious warning") ||
-      lower.includes("no warning")
-    ) {
-      warningSigns.push({
-        label: "No obvious warning signs found",
-        why:
-          "Based on what you shared, JAAL did not spot common scam patterns. That does not guarantee something was safe — always stay cautious with unexpected requests.",
-      });
-      recommendations.push(
-        "If anything changes or feels off, report it again.",
-        "Keep monitoring the message, number or link you shared.",
-        "If you're ever unsure, pause and check through official channels.",
-      );
-    } else {
-      // Unknown output shape — keep it honest: do not invent signs.
-    }
-  }
+  // Overall assessment label based on grounded findings severity.
+  const overallAssessment =
+    analysis?.status === "COMPLETED"
+      ? threat.findings.some((f) => f.severity.toLowerCase() === "high")
+        ? "High Concern"
+        : threat.findings.length > 0
+        ? "Warning Signs Found"
+        : "No Obvious Warning Signs"
+      : analysis?.status === "UNAVAILABLE" || analysis?.status === "FAILED"
+      ? "Unable to Assess"
+      : null;
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <header className="mb-6 flex items-center justify-between">
+      <div className="max-w-2xl mx-auto" aria-busy="true">
+        <header className="mb-6">
           <div className="h-6 w-40 bg-[var(--color-consumer-border)] rounded animate-pulse" />
-          <div className="h-8 w-24 bg-[var(--color-consumer-border)] rounded animate-pulse" />
         </header>
         <div className="glass p-6 space-y-4">
           <div className="h-20 bg-[var(--color-consumer-border)] rounded-xl animate-pulse" />
@@ -199,11 +171,12 @@ function evidenceIcon(type?: string | null) {
             ))}
           </div>
         </div>
+        <span className="sr-only">Loading report…</span>
       </div>
     );
   }
 
-  if (error) {
+  if (!report) {
     return (
       <div className="max-w-2xl mx-auto">
         <header className="mb-6">
@@ -213,7 +186,8 @@ function evidenceIcon(type?: string | null) {
         </header>
         <div className="glass p-6 text-center">
           <p className="text-sm text-[var(--color-consumer-muted)]">
-            {error}
+            We couldn't find this report. It may have been removed, or it
+            doesn't belong to your account.
           </p>
           <Link
             to="/consumer/reports"
@@ -225,10 +199,6 @@ function evidenceIcon(type?: string | null) {
         </div>
       </div>
     );
-  }
-
-  if (!report) {
-    return null;
   }
 
   return (
@@ -248,9 +218,7 @@ function evidenceIcon(type?: string | null) {
               <h1 className="text-2xl font-semibold text-[var(--color-consumer-deep)]">
                 {report.caseId ?? "Report"}
               </h1>
-              <span className="chip">
-                {topCategory ?? "Other"}
-              </span>
+              <span className="chip">{report.category ?? "Other"}</span>
             </div>
             <p className="mt-1 text-[var(--color-consumer-muted)] text-sm flex items-center gap-1.5 flex-wrap">
               <Calendar className="w-4 h-4" />
@@ -280,7 +248,6 @@ function evidenceIcon(type?: string | null) {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left: submitted info */}
         <div className="lg:col-span-3 space-y-5">
-          {/* Submitted information */}
           <section aria-labelledby="submitted-title">
             <h2
               id="submitted-title"
@@ -290,19 +257,12 @@ function evidenceIcon(type?: string | null) {
               What you shared
             </h2>
             <div className="glass-strong p-5 shadow-sm mt-3 space-y-3">
-              {report.description ? (
-                <p className="text-sm text-[var(--color-consumer-text)] leading-relaxed">
-                  {report.description}
-                </p>
-              ) : (
-                <p className="text-sm text-[var(--color-consumer-muted)] italic">
-                  No description was provided.
-                </p>
-              )}
+              <p className="text-sm text-[var(--color-consumer-text)] leading-relaxed">
+                {report.description || "No description was provided."}
+              </p>
             </div>
           </section>
 
-          {/* Attachments */}
           {attachments.length > 0 && (
             <section aria-labelledby="attachments-title">
               <h2
@@ -340,7 +300,6 @@ function evidenceIcon(type?: string | null) {
             </section>
           )}
 
-          {/* Trustline */}
           <div className="flex items-center gap-2 text-xs text-[var(--color-consumer-muted)] justify-end">
             <Shield className="w-4 h-4 text-[var(--color-consumer-teal)]" />
             <span className="font-medium text-[var(--color-consumer-teal)]">
@@ -351,7 +310,6 @@ function evidenceIcon(type?: string | null) {
 
         {/* Right: AI assessment */}
         <div className="lg:col-span-2 space-y-5">
-          {/* AI assessment card */}
           <section aria-labelledby="analysis-title">
             <h2
               id="analysis-title"
@@ -361,113 +319,113 @@ function evidenceIcon(type?: string | null) {
               JAAL's read
             </h2>
             <div className="mt-3 glass-strong p-5 shadow-md">
-              {/* Status pill */}
               <div className="flex items-center justify-between mb-4">
                 <span className="chip">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: analysis?.status ? "#159b78" : "#60748f" }} />
-                  {analysisInfo.label}
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full"
+                    style={{
+                      background: analysis?.status === "COMPLETED" ? "#159b78" : "#60748f",
+                    }}
+                  />
+                  {analysisLabel}
                 </span>
-                {analysis && analysis.status === "processing" && (
+                {analysis?.status === "PROCESSING" && (
                   <Loader2 className="w-4 h-4 text-[var(--color-consumer-primary)] animate-spin" />
                 )}
               </div>
 
-              {analysis?.status === "completed" && (
-                <>
-                  {/* Risk band */}
-                  {warningSigns.length > 0 && (
-                    <div className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-glass)] p-4 mb-4">
-                      <h3 className="text-sm font-semibold text-[var(--color-consumer-deep)] flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-4 h-4 text-[var(--color-consumer-teal)]" />
-                        Warning signs
-                      </h3>
-                      <ul className="space-y-2 text-sm">
-                        {warningSigns.map((w, i) => (
-                          <li key={i} className="flex gap-2">
-                            <span className="mt-0.5 shrink-0 text-[var(--color-consumer-teal)] text-base">
-                              !
-                            </span>
-                            <div>
-                              <p className="font-medium text-[var(--color-consumer-text)]">
-                                {w.label}
-                              </p>
-                              <p className="text-[var(--color-consumer-muted)] text-xs leading-relaxed">
-                                {w.why}
-                              </p>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+              {overallAssessment && (
+                <div className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-glass)] p-4 mb-4">
+                  <p className="text-sm font-semibold text-[var(--color-consumer-deep)]">
+                    Overall assessment
+                  </p>
+                  <p className="mt-1 text-[var(--color-consumer-text)] text-sm leading-relaxed">
+                    {overallAssessment}
+                  </p>
+                  {threat.overview && (
+                    <p className="mt-2 text-[var(--color-consumer-muted)] text-xs leading-relaxed">
+                      {threat.overview}
+                    </p>
                   )}
-
-                  {/* Recommendations */}
-                  {recommendations.length > 0 && (
-                    <div className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-mint)] p-4">
-                      <h3 className="text-sm font-semibold text-[var(--color-consumer-deep)] flex items-center gap-2 mb-2">
-                        <CheckCircle2 className="w-4 h-4 text-[var(--color-consumer-teal)]" />
-                        What to do next
-                      </h3>
-                      <ul className="space-y-2 text-sm text-[var(--color-consumer-text)]">
-                        {recommendations.map((r, i) => (
-                          <li key={i} className="flex gap-2">
-                            <span className="mt-0.5 shrink-0 text-[var(--color-consumer-teal)]">
-                              1.
-                            </span>
-                            <span className="leading-relaxed">{r}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-3 text-[11px] text-[var(--color-consumer-muted)] leading-relaxed border-t border-[var(--color-consumer-border)] pt-3">
-                        This is a helpfulness check, not an official fraud
-                        determination. When in doubt, pause and verify through
-                        official channels.
-                      </p>
-                    </div>
-                  )}
-
-                  {warningSigns.length === 0 &&
-                    recommendations.length === 0 && (
-                      <p className="text-sm text-[var(--color-consumer-muted)] leading-relaxed">
-                        Analysed, but no specific warning signs or
-                        recommendations were generated for this report.
-                      </p>
-                    )}
-                </>
+                </div>
               )}
 
-              {analysis?.status === "processing" && (
+              {analysis?.status === "COMPLETED" && threat.findings.length > 0 && (
+                <div className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-glass)] p-4 mb-4">
+                  <h3 className="text-sm font-semibold text-[var(--color-consumer-deep)] flex items-center gap-2 mb-2">
+                    <AlertTriangle className="w-4 h-4 text-[var(--color-consumer-teal)]" />
+                    Warning signs
+                  </h3>
+                  <ul className="space-y-3 text-sm">
+                    {threat.findings.map((f, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="mt-0.5 shrink-0 text-[var(--color-consumer-teal)] text-base">
+                          !
+                        </span>
+                        <div>
+                          <p className="font-medium text-[var(--color-consumer-text)]">
+                            {f.title}
+                          </p>
+                          <p className="text-[var(--color-consumer-muted)] text-xs leading-relaxed">
+                            {f.explanation}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {analysis?.status === "COMPLETED" && threat.steps.length > 0 && (
+                <div className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-mint)] p-4">
+                  <h3 className="text-sm font-semibold text-[var(--color-consumer-deep)] flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="w-4 h-4 text-[var(--color-consumer-teal)]" />
+                    What to do next
+                  </h3>
+                  <ul className="space-y-2 text-sm text-[var(--color-consumer-text)]">
+                    {threat.steps.map((r, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="mt-0.5 shrink-0 text-[var(--color-consumer-teal)]">
+                          {i + 1}.
+                        </span>
+                        <span className="leading-relaxed">{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {analysis?.status === "PROCESSING" && (
                 <p className="text-sm text-[var(--color-consumer-muted)] leading-relaxed">
                   JAAL is reviewing what you shared. This only uses the
                   information in your report.
                 </p>
               )}
 
-              {analysis?.status === "unavailable" && (
+              {(analysis?.status === "UNAVAILABLE" ||
+                analysis?.status === "FAILED") && (
                 <div className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-glass)] p-4">
                   <p className="text-sm text-[var(--color-consumer-muted)] leading-relaxed">
-                    Analysis is currently unavailable. Your report has still
-                    been saved — you can come back later.
+                    Analysis is currently unavailable, but your report has
+                    still been saved. You can check back later.
                   </p>
                 </div>
               )}
 
-              {analysis?.status === "failed" && (
-                <div className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-glass)] p-4">
-                  <p className="text-sm text-[var(--color-consumer-muted)] leading-relaxed">
-                    The analysis could not be completed. Your report has still
-                    been saved. You can try again later.
-                  </p>
-                </div>
-              )}
-
-              {analysis?.status === "not_started" && (
+              {(!analysis || analysis.status === undefined) && (
                 <p className="text-sm text-[var(--color-consumer-muted)] leading-relaxed">
                   This report has not been analysed yet.
                 </p>
               )}
 
-              {/* Honest disclosure */}
+              {analysis?.limitations && analysis.limitations.length > 0 && (
+                <ul className="mt-4 space-y-1 text-[11px] text-[var(--color-consumer-muted)] leading-relaxed border-t border-[var(--color-consumer-border)] pt-3">
+                  {analysis.limitations.map((l, i) => (
+                    <li key={i}>• {l}</li>
+                  ))}
+                </ul>
+              )}
+
               <p className="mt-4 text-[11px] text-[var(--color-consumer-muted)] leading-relaxed border-t border-[var(--color-consumer-border)] pt-3">
                 JAAL's read is a helpfulness check based only on what you
                 shared. It is not an official fraud determination, not legal

@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useMutation } from "convex/react";
 import { Link, useSearchParams } from "react-router";
 import {
   MessageSquare,
   Phone,
   Receipt,
-  Link,
+  Link as LinkIcon,
   HelpCircle,
   ChevronLeft,
   ChevronRight,
@@ -16,8 +17,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import type { ConsumerCategoryKey } from "@/convex/_generated/dataModel";
-import type { Investigation } from "@/convex/_generated/dataModel";
+
+type ConsumerCategoryKey = "message" | "call" | "payment" | "link" | "other";
 
 const CATEGORIES = [
   {
@@ -42,7 +43,7 @@ const CATEGORIES = [
     key: "link" as const,
     label: "Suspicious Link",
     description: "A link that looked strange or unexpected.",
-    icon: Link,
+    icon: LinkIcon,
   },
   {
     key: "other" as const,
@@ -64,6 +65,7 @@ const ALLOWED_TYPES = [
 
 export default function ConsumerReportPage() {
   const [searchParams] = useSearchParams();
+  const createConsumerReport = useMutation(api.consumer.createConsumerReport);
 
   const preselectedCategory = (searchParams.get("category") as ConsumerCategoryKey | null) ?? null;
 
@@ -90,7 +92,7 @@ export default function ConsumerReportPage() {
   const [otherDescription, setOtherDescription] = useState("");
 
   // Attachment
-  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [, setAttachmentFile] = useState<File | null>(null);
   const [attachmentLabel, setAttachmentLabel] = useState("");
   const [attachmentText, setAttachmentText] = useState("");
   const [attachmentProgress, setAttachmentProgress] = useState(0);
@@ -102,13 +104,48 @@ export default function ConsumerReportPage() {
   // UI state
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState<Investigation | null>(null);
+  const [submitted, setSubmitted] = useState<
+    Awaited<ReturnType<typeof createConsumerReport>>["report"] | null
+  >(null);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [attention, setAttention] = useState<string | null>(null);
 
 
 
+  const uploadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearUploadTimer = () => {
+    if (uploadTimerRef.current) {
+      clearInterval(uploadTimerRef.current);
+      uploadTimerRef.current = null;
+    }
+  };
+
+  // Clean up any running upload simulation on unmount (cleanup-only, no setState).
+  useEffect(() => clearUploadTimer, []);
+
+  // Simulated upload progress. Triggered from the file-change event handler so
+  // the state updates happen in an event, not inside an effect.
+  const startSimulatedUpload = () => {
+    clearUploadTimer();
+    setAttachmentStatus("uploading");
+    setAttachmentProgress(0);
+    let progress = 0;
+    uploadTimerRef.current = setInterval(() => {
+      progress += Math.floor(Math.random() * 25) + 10;
+      if (progress >= 100) {
+        progress = 100;
+        clearUploadTimer();
+        setAttachmentProgress(100);
+        setAttachmentStatus("ready");
+      } else {
+        setAttachmentProgress(progress);
+      }
+    }, 180);
+  };
+
   const resetAttachment = () => {
+    clearUploadTimer();
     setAttachmentFile(null);
     setAttachmentLabel("");
     setAttachmentText("");
@@ -140,41 +177,8 @@ export default function ConsumerReportPage() {
     setAttachmentFile(file);
     setAttachmentLabel(file.name);
     setAttachmentError(null);
-    setAttachmentStatus("ready");
+    startSimulatedUpload();
   };
-
-  const simulateUpload = useCallback(() => {
-    if (!attachmentFile) return;
-    setAttachmentStatus("uploading");
-    setAttachmentProgress(0);
-    let progress = 0;
-    const timer = setInterval(() => {
-      progress += Math.floor(Math.random() * 25) + 10;
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(timer);
-        setAttachmentProgress(100);
-        setAttachmentStatus("ready");
-      } else {
-        setAttachmentProgress(progress);
-      }
-    }, 180);
-    return timer;
-  }, [attachmentFile]);
-
-  const startAttachment = useCallback(() => {
-    if (!attachmentFile) return;
-    const timer = simulateUpload();
-    // Clean up if user navigates away (rough).
-    return timer;
-  }, [attachmentFile, simulateUpload]);
-
-  useEffect(() => {
-    if (attachmentFile && attachmentStatus === "ready") {
-      const timer = startAttachment();
-      return () => clearInterval(timer);
-    }
-  }, [attachmentFile, attachmentStatus, startAttachment]);
 
   const previewCategory = CATEGORIES.find(
     (c) => c.key === category,
@@ -234,7 +238,7 @@ export default function ConsumerReportPage() {
     setAttention(null);
 
     try {
-      const result = await api.consumer.createConsumerReport({
+      const result = await createConsumerReport({
         category: category,
         messageText: messageText || undefined,
         conversationText: conversationText || undefined,
@@ -397,7 +401,7 @@ export default function ConsumerReportPage() {
 
           <div className="glass-strong p-6 shadow-md space-y-5">
             {/* Shared: optional attachment */}
-            {["message", "call", "payment", "link", "other"].includes(category) && (
+            {["message", "call", "payment", "link", "other"].includes(category ?? "") && (
               <div className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-glass)] p-4">
                 <label
                   htmlFor="attachment"
