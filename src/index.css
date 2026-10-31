@@ -1,60 +1,220 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+ * JAAL investigator theme — forensic dark palette.
+ * DO NOT CHANGE: these tokens back the entire investigator console.
+ * ------------------------------------------------------------------------ */
+@theme {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-jcyan: #39d6e8;
+  --color-jteal: #1b8f91;
+  --color-jamber: #ffaa45;
+  --color-jred: #f15b64;
+  --color-jgreen: #35d6a1;
+  --color-jsurface: #081923;
+  --color-jborder: #174451;
+  --color-jmuted: #7899a9;
+  --color-jtext: #dcebf0;
+
+  --color-border: var(--border);
+}
+
+/* shadcn semantic colors — inlined into utilities so they read the :root vars. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+/* Raw colour values (investigator dark theme). */
+:root {
+  --radius: 0.5rem;
+  --background: #06131c;
+  --foreground: #dcebf0;
+  --card: #0b202c;
+  --card-foreground: #dcebf0;
+  --popover: #0b202c;
+  --popover-foreground: #dcebf0;
+  --primary: #39d6e8;
+  --primary-foreground: #06131c;
+  --secondary: #081923;
+  --secondary-foreground: #dcebf0;
+  --muted: #081923;
+  --muted-foreground: #7899a9;
+  --accent: #102b39;
+  --accent-foreground: #39d6e8;
+  --destructive: #f15b64;
+  --destructive-foreground: #06131c;
+  --border: #174451;
+  --input: #174451;
+  --ring: #39d6e8;
+  --chart-1: #39d6e8;
+  --chart-2: #35d6a1;
+  --chart-3: #ffaa45;
+  --chart-4: #f15b64;
+  --chart-5: #1b8f91;
+  --sidebar: #081923;
+  --sidebar-foreground: #dcebf0;
+  --sidebar-primary: #39d6e8;
+  --sidebar-primary-foreground: #06131c;
+  --sidebar-accent: #102b39;
+  --sidebar-accent-foreground: #39d6e8;
+  --sidebar-border: #174451;
+  --sidebar-ring: #39d6e8;
+}
+
+@keyframes jaal-pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
 
 @layer base {
   *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
-  }
-
-  html {
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-    font-size: 16px;
-    line-height: 1.5;
-    -webkit-text-size-adjust: 100%;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  ::before,
+  ::after {
+    border-color: var(--border);
+    outline-color: var(--ring);
   }
 
   body {
-    margin: 0;
-    min-height: 100vh;
-    background-color: theme("colors.slate.950");
-    color: theme("colors.slate.100");
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
+}
 
-  /* Focus outline tokens for accessible keyboard navigation */
-  :focus-visible {
-    outline: 3px solid theme("colors.ring.4");
-    outline-offset: 2px;
-    border-radius: 10px;
-  }
-
-  /* Reduced-motion preference */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
 @layer utilities {
   /* ------------------------------------------------------------------------
+   * JAAL investigator custom utilities (forensic console surfaces).
+   * --------------------------------------------------------------------- */
+  .jaal-panel {
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    background: #0b202cd9;
+    border: 1px solid #174451b3;
+    box-shadow: inset 0 1px #39d6e80d;
+  }
+
+  .jaal-grid {
+    background-image: linear-gradient(#39d6e809 1px, transparent 1px),
+      linear-gradient(90deg, #39d6e809 1px, transparent 1px);
+    background-size: 34px 34px;
+  }
+
+  .jaal-scanlines {
+    position: relative;
+  }
+
+  .jaal-scanlines::after {
+    content: "";
+    pointer-events: none;
+    opacity: 0.35;
+    background: repeating-linear-gradient(#06131c00 0 3px, #06131c2e 4px);
+    position: absolute;
+    inset: 0;
+  }
+
+  .jaal-hud::before,
+  .jaal-hud::after {
+    content: "";
+    pointer-events: none;
+    border-color: #39d6e8a6;
+    width: 14px;
+    height: 14px;
+    position: absolute;
+  }
+
+  .jaal-hud::before {
+    border-top: 1px solid;
+    border-left: 1px solid;
+    top: -1px;
+    left: -1px;
+  }
+
+  .jaal-hud::after {
+    border-bottom: 1px solid;
+    border-right: 1px solid;
+    bottom: -1px;
+    right: -1px;
+  }
+
+  .jaal-pulse {
+    animation: jaal-pulse-dot 1.8s ease-in-out infinite;
+  }
+
+  .jaal-label {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: #7899a9;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .df-mono {
+    font-family: var(--font-mono);
+  }
+
+  /* ------------------------------------------------------------------------
    * Consumer theme — soft blue glassmorphism, applied by route via the class
    * `.theme-consumer` on the root/layout wrapper.
    *
-   * These re-map Tailwind semantic colour tokens ONLY inside consumer routes
-   * so the investigator dark forensic palette stays untouched.
-   * ------------------------------------------------------------------------ */
+   * These are plain CSS custom properties scoped to `.theme-consumer` so the
+   * investigator dark forensic palette stays untouched.
+   * --------------------------------------------------------------------- */
 
   .theme-consumer {
     --color-consumer-bg: #eaf3ff;
@@ -66,9 +226,9 @@
     --color-consumer-border-soft: rgba(40, 120, 215, 0.14);
     --color-consumer-primary: #2878d7;
     --color-consumer-primary-hover: #1d62b5;
-    --color-consumer-primary-soft: rgba(40, 120, 215, 0.10);
+    --color-consumer-primary-soft: rgba(40, 120, 215, 0.1);
     --color-consumer-deep: #12366f;
-    --color-consumer-mint: #bdef e1;
+    --color-consumer-mint: #bdefe1;
     --color-consumer-mint-strong: #9fe6c9;
     --color-consumer-teal: #159b78;
     --color-consumer-teal-hover: #0e795f;
@@ -78,7 +238,7 @@
     --color-consumer-shadow: 0 1px 3px rgba(18, 54, 111, 0.06),
       0 8px 30px rgba(18, 54, 111, 0.08);
     --color-consumer-shadow-strong: 0 4px 12px rgba(18, 54, 111, 0.08),
-      0 24px 60px rgba(18, 54, 111, 0.10);
+      0 24px 60px rgba(18, 54, 111, 0.1);
     --color-consumer-radius: 22px;
     --color-consumer-radius-sm: 14px;
     --color-consumer-radius-pill: 999px;
@@ -86,6 +246,8 @@
     color-scheme: light;
     background-color: var(--color-consumer-bg);
     color: var(--color-consumer-text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -94,6 +256,12 @@
   .theme-consumer ::selection {
     background-color: rgba(40, 120, 215, 0.18);
     color: var(--color-consumer-deep);
+  }
+
+  /* Accessible focus indicator, scoped to consumer routes only. */
+  .theme-consumer :focus-visible {
+    outline: 3px solid var(--color-consumer-primary);
+    outline-offset: 2px;
   }
 
   /* Glass card — the signature surface */
@@ -117,32 +285,43 @@
 
   /* Soft blue gradient surface */
   .gradient-sky {
-    background: linear-gradient(180deg, var(--color-consumer-bg-2) 0%, var(--color-consumer-bg) 100%);
+    background: linear-gradient(
+      180deg,
+      var(--color-consumer-bg-2) 0%,
+      var(--color-consumer-bg) 100%
+    );
   }
 
   /* Interactive pill highlight for active nav destinations */
   .pill-active {
-    background: linear-gradient(90deg, var(--color-consumer-primary) 0%, var(--color-consumer-deep) 100%);
+    background: linear-gradient(
+      90deg,
+      var(--color-consumer-primary) 0%,
+      var(--color-consumer-deep) 100%
+    );
     color: #ffffff;
     box-shadow: 0 2px 10px rgba(31, 79, 138, 0.18);
   }
 
   /* Teal positive CTA */
   .btn-teal {
-    background: linear-gradient(180deg, var(--color-consumer-teal) 0%, var(--color-consumer-teal-hover) 100%);
+    background: linear-gradient(
+      180deg,
+      var(--color-consumer-teal) 0%,
+      var(--color-consumer-teal-hover) 100%
+    );
     color: #ffffff;
     font-weight: 600;
     box-shadow: 0 2px 10px rgba(21, 155, 120, 0.22);
   }
 
-  .btn-teal:focus-visible {
-    outline: 3px solid var(--color-consumer-teal);
-    outline-offset: 2px;
-  }
-
   /* Primary CTA */
   .btn-primary {
-    background: linear-gradient(180deg, var(--color-consumer-primary) 0%, var(--color-consumer-deep) 100%);
+    background: linear-gradient(
+      180deg,
+      var(--color-consumer-primary) 0%,
+      var(--color-consumer-deep) 100%
+    );
     color: #ffffff;
     font-weight: 600;
     box-shadow: 0 2px 10px rgba(31, 79, 138, 0.22);
@@ -150,7 +329,11 @@
 
   /* Mint CTA for reassurance / positive actions */
   .btn-mint {
-    background: linear-gradient(180deg, var(--color-consumer-mint-strong) 0%, var(--color-consumer-mint) 100%);
+    background: linear-gradient(
+      180deg,
+      var(--color-consumer-mint-strong) 0%,
+      var(--color-consumer-mint) 100%
+    );
     color: var(--color-consumer-deep);
     font-weight: 600;
     box-shadow: 0 2px 10px rgba(159, 230, 201, 0.4);
@@ -180,14 +363,14 @@
     gap: 0.4rem;
   }
 
-  /* Scam category tile for the "All Destinations" panel */
+  /* Destination tile for the "All Destinations" panel */
   .tile {
     border: 1px solid var(--color-consumer-border);
     background: var(--color-consumer-glass-strong);
     border-radius: var(--color-consumer-radius);
     box-shadow: var(--color-consumer-shadow);
-    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease,
-      background 120ms ease, color 120ms ease;
+    transition: transform 120ms ease, box-shadow 120ms ease,
+      border-color 120ms ease, background 120ms ease, color 120ms ease;
     cursor: pointer;
     text-align: left;
     color: var(--color-consumer-text-soft);
@@ -203,13 +386,12 @@
     border-color: var(--color-consumer-primary);
   }
 
-  .tile:focus-visible {
-    outline: 3px solid var(--color-consumer-primary);
-    outline-offset: 3px;
-  }
-
   .tile.active {
-    background: linear-gradient(180deg, var(--color-consumer-primary) 0%, var(--color-consumer-deep) 100%);
+    background: linear-gradient(
+      180deg,
+      var(--color-consumer-primary) 0%,
+      var(--color-consumer-deep) 100%
+    );
     border-color: transparent;
     color: #ffffff;
     box-shadow: 0 2px 10px rgba(31, 79, 138, 0.18);
@@ -241,10 +423,17 @@
     color: var(--color-consumer-text);
     letter-spacing: -0.01em;
   }
-}
 
-@layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@media print {
+  .jaal-no-print {
+    display: none !important;
+  }
+  .jaal-grid {
+    background: #fff !important;
   }
 }

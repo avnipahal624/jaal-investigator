@@ -18,6 +18,7 @@ import {
 } from "@/hooks/use-auth";
 import {
   useRoleIntent,
+  RoleIntentProvider,
 } from "@/hooks/use-role.tsx";
 import { ArrowRight, Loader2, Mail, UserX, Shield, User } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
@@ -248,7 +249,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               type="button"
               className={`group relative w-full rounded-2xl border-2 p-6 text-left transition-all duration-200 ${
                 intent === "investigator"
-                  ? "border-[var(--color-consumer-primary)] bg-[var(--color-glass-strong)] shadow-lg shadow-[var(--color-consumer-primary)]/10"
+                  ? "border-[var(--color-consumer-primary)] bg-[var(--color-consumer-glass-strong)] shadow-lg shadow-[var(--color-consumer-primary)]/10"
                   : "border-[var(--color-consumer-border)] bg-[var(--color-consumer-glass)] hover:border-[var(--color-consumer-primary)]/50 hover:shadow-md"
               }`}
               onClick={selectAsInvestigator}
@@ -608,8 +609,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
 export default function AuthPage(props: AuthProps) {
   return (
-    <Suspense>
-      <Auth {...props} />
-    </Suspense>
+    <RoleIntentProvider>
+      <Suspense>
+        <Auth {...props} />
+      </Suspense>
+    </RoleIntentProvider>
   );
 }
