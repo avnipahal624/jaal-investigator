@@ -1,725 +1,250 @@
-/* DO NOT CHANGE */
-@import "tailwindcss";
-@import "tw-animate-css";
-@custom-variant dark (&:is(.dark *));
-
-/* DO NOT CHANGE */
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-}
-
-/* CHANGE VALUES FOR THEME — JAAL cyber-forensics palette */
-:root {
-  --radius: 0.5rem;
-  --background: #06131c;
-  --foreground: #dcebf0;
-  --card: #0b202c;
-  --card-foreground: #dcebf0;
-  --popover: #0b202c;
-  --popover-foreground: #dcebf0;
-  --primary: #39d6e8;
-  --primary-foreground: #06131c;
-  --secondary: #081923;
-  --secondary-foreground: #dcebf0;
-  --muted: #081923;
-  --muted-foreground: #7899a9;
-  --accent: #102b39;
-  --accent-foreground: #39d6e8;
-  --destructive: #f15b64;
-  --destructive-foreground: #06131c;
-  --border: #174451;
-  --input: #174451;
-  --ring: #39d6e8;
-  --chart-1: #39d6e8;
-  --chart-2: #35d6a1;
-  --chart-3: #ffaa45;
-  --chart-4: #f15b64;
-  --chart-5: #1b8f91;
-  --sidebar: #081923;
-  --sidebar-foreground: #dcebf0;
-  --sidebar-primary: #39d6e8;
-  --sidebar-primary-foreground: #06131c;
-  --sidebar-accent: #102b39;
-  --sidebar-accent-foreground: #39d6e8;
-  --sidebar-border: #174451;
-  --sidebar-ring: #39d6e8;
-}
-
-/* JAAL semantic colors + type scale (additive theme extensions) */
-@theme {
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
-  --font-serif: Georgia, "Iowan Old Style", "Palatino Linotype",
-    "Times New Roman", serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --color-jcyan: #39d6e8;
-  --color-jteal: #1b8f91;
-  --color-jamber: #ffaa45;
-  --color-jred: #f15b64;
-  --color-jgreen: #35d6a1;
-  --color-jbg: #06131c;
-  --color-jsurface: #081923;
-  --color-jpanel: #0b202c;
-  --color-jelev: #102b39;
-  --color-jborder: #174451;
-  --color-jmuted: #7899a9;
-  --color-jtext: #dcebf0;
-}
-
-.dark {
-  --background: #06131c;
-  --foreground: #dcebf0;
-  --card: #0b202c;
-  --card-foreground: #dcebf0;
-  --popover: #0b202c;
-  --popover-foreground: #dcebf0;
-  --primary: #39d6e8;
-  --primary-foreground: #06131c;
-  --secondary: #081923;
-  --secondary-foreground: #dcebf0;
-  --muted: #081923;
-  --muted-foreground: #7899a9;
-  --accent: #102b39;
-  --accent-foreground: #39d6e8;
-  --destructive: #f15b64;
-  --destructive-foreground: #06131c;
-  --border: #174451;
-  --input: #174451;
-  --ring: #39d6e8;
-  --sidebar: #081923;
-  --sidebar-foreground: #dcebf0;
-  --sidebar-primary: #39d6e8;
-  --sidebar-primary-foreground: #06131c;
-  --sidebar-accent: #102b39;
-  --sidebar-accent-foreground: #39d6e8;
-  --sidebar-border: #174451;
-  --sidebar-ring: #39d6e8;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-  }
-  button:not([disabled]),
-  [role="button"]:not([disabled]) {
-    cursor: pointer;
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* JAAL cinematic forensics surface treatments                          */
-/* ------------------------------------------------------------------ */
-
-@layer utilities {
-  /* Technical grid texture for large dark surfaces */
-  .jaal-grid {
-    background-image:
-      linear-gradient(rgba(57, 214, 232, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(57, 214, 232, 0.035) 1px, transparent 1px);
-    background-size: 34px 34px;
-  }
-  .jaal-grid-fine {
-    background-image:
-      linear-gradient(rgba(57, 214, 232, 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(57, 214, 232, 0.05) 1px, transparent 1px);
-    background-size: 14px 14px;
-  }
-  /* Faint scanline veil */
-  .jaal-scanlines {
-    position: relative;
-  }
-  .jaal-scanlines::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: repeating-linear-gradient(
-      to bottom,
-      rgba(6, 19, 28, 0) 0px,
-      rgba(6, 19, 28, 0) 3px,
-      rgba(6, 19, 28, 0.18) 4px
-    );
-    opacity: 0.35;
-  }
-  /* HUD corner brackets around a panel */
-  .jaal-hud::before,
-  .jaal-hud::after {
-    content: "";
-    position: absolute;
-    width: 14px;
-    height: 14px;
-    border-color: rgba(57, 214, 232, 0.65);
-    pointer-events: none;
-  }
-  .jaal-hud::before {
-    top: -1px;
-    left: -1px;
-    border-top: 1px solid;
-    border-left: 1px solid;
-  }
-  .jaal-hud::after {
-    right: -1px;
-    bottom: -1px;
-    border-right: 1px solid;
-    border-bottom: 1px solid;
-  }
-  .jaal-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    line-height: 1.2;
-    text-transform: uppercase;
-    letter-spacing: 0.22em;
-    color: #7899a9;
-  }
-  .jaal-panel {
-    border: 1px solid rgba(23, 68, 81, 0.7);
-    background: rgba(11, 32, 44, 0.85);
-    backdrop-filter: blur(2px);
-    box-shadow: inset 0 1px 0 rgba(57, 214, 232, 0.05);
-  }
-  /* Evidence board — cinematic forensic canvas: technical grid + top vignette */
-  .jaal-board {
-    background-image:
-      radial-gradient(
-        ellipse at 50% -10%,
-        rgba(57, 214, 232, 0.06),
-        transparent 55%
-      ),
-      linear-gradient(rgba(27, 143, 145, 0.07) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(27, 143, 145, 0.07) 1px, transparent 1px);
-    background-size: 100% 100%, 28px 28px, 28px 28px;
-  }
-  .jaal-board-node {
-    position: absolute;
-    user-select: none;
-    touch-action: none;
-  }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .no-scrollbar {
-    scrollbar-width: none;
-  }
-}
-
-/* Thin cinematic scrollbars */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(57, 214, 232, 0.35) transparent;
-}
-*::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  background: rgba(57, 214, 232, 0.28);
-  border-radius: 4px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(57, 214, 232, 0.5);
-}
-
-/* Keyframes */
-@keyframes jaal-pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.35;
-    transform: scale(0.82);
-  }
-}
-@keyframes jaal-caret {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes jaal-sweep {
-  0% {
-    transform: translateY(-100%);
-  }
-  100% {
-    transform: translateY(400%);
-  }
-}
-@keyframes jaal-flow {
-  0% {
-    background-position: 0% 0%;
-  }
-  100% {
-    background-position: 200% 0%;
-  }
-}
-
-.jaal-pulse {
-  animation: jaal-pulse-dot 1.8s ease-in-out infinite;
-}
-.jaal-caret {
-  animation: jaal-caret 1s step-end infinite;
-}
-.jaal-sweep {
-  animation: jaal-sweep 3.2s linear infinite;
-}
-
-/* Settings-driven accent intensity */
-[data-accent="subtle"] {
-  --jaal-glow: 0.35;
-}
-[data-accent="standard"] {
-  --jaal-glow: 0.6;
-}
-[data-accent="vivid"] {
-  --jaal-glow: 1;
-}
-
-/* Settings-driven density */
-[data-density="compact"] .density-py {
-  padding-top: 0.375rem;
-  padding-bottom: 0.375rem;
-}
-
-/* Settings-driven animation toggle */
-[data-anim="off"],
-[data-anim="off"] * {
-  animation-duration: 0.001s !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.001s !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.001s !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001s !important;
+    box-sizing: border-box;
   }
-}
 
-/* ------------------------------------------------------------------ */
-/* Report dossier — DARK FORENSIC INTELLIGENCE DOSSIER                 */
-/*                                                                      */
-/* One markup, one dark skin (screen + PDF). Structure is carried by    */
-/* thin cyan rules, mono labels and 1px borders — never by background   */
-/* colour alone — so the document survives with browser "background     */
-/* graphics" switched off.                                              */
-/* ------------------------------------------------------------------ */
-.df-sheet {
-  position: relative;
-  padding: 22px 16px;
-  background: var(--color-jbg);
-  color: var(--color-jtext);
-  font-family: var(--font-sans);
-  border: 1px solid rgba(57, 214, 232, 0.28);
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-@media (min-width: 640px) {
-  .df-sheet {
-    padding: 36px 40px;
+  html {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-}
 
-/* Subtle technical grid — the dossier's own surface, not the app shell */
-.df-grid {
-  background-image:
-    linear-gradient(rgba(57, 214, 232, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(57, 214, 232, 0.05) 1px, transparent 1px);
-  background-size: 30px 30px;
-}
-
-.df-mono {
-  font-family: var(--font-mono);
-}
-
-/* Technical kicker — mono, tracked, uppercase */
-.df-kicker {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  line-height: 1.3;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--color-jmuted);
-}
-
-/* Hairline rules — the primary structural device */
-.df-rule {
-  border: none;
-  border-top: 1px solid var(--color-jborder);
-  margin: 0;
-}
-.df-rule-strong {
-  border: none;
-  border-top: 1px solid rgba(57, 214, 232, 0.5);
-  margin: 0;
-}
-
-/* Status stamp — label text is always present; colour is secondary */
-.df-stamp {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  padding: 2px 7px;
-  border: 1px solid currentColor;
-  white-space: nowrap;
-  line-height: 1.5;
-}
-.df-stamp::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  flex-shrink: 0;
-  background: currentColor;
-}
-
-/* Section header — technical number chip + compact heading + rule */
-.df-sechead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 10px;
-  padding-bottom: 7px;
-  border-bottom: 1px solid rgba(57, 214, 232, 0.35);
-  break-after: avoid;
-  page-break-after: avoid;
-}
-.df-secnum {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--color-jcyan);
-  padding: 2px 6px;
-  border: 1px solid rgba(57, 214, 232, 0.45);
-  background: rgba(57, 214, 232, 0.08);
-  line-height: 1.3;
-}
-.df-sectitle {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--color-jtext);
-}
-.df-secdeck {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-jmuted);
-  text-align: right;
-  max-width: 100%;
-}
-@media (max-width: 640px) {
-  .df-secdeck {
-    margin-left: 0;
-    width: 100%;
-    text-align: left;
-  }
-}
-
-/* Section body — content sits under the rule */
-.df-body {
-  padding-top: 12px;
-}
-
-/* Card — the dossier's unit of structure.
-   Deliberately NOT break-inside: avoid — several cards run taller than one
-   A4 page, and forcing them intact would clip them instead of breaking. */
-.df-card {
-  background: var(--color-jpanel);
-  border: 1px solid rgba(23, 68, 81, 0.9);
-}
-
-/* Compact technical metadata grid */
-.df-kv {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  background: rgba(23, 68, 81, 0.65);
-  border: 1px solid rgba(23, 68, 81, 0.65);
-}
-@media (min-width: 760px) {
-  .df-kv {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-.df-kv-cell {
-  background: var(--color-jpanel);
-  padding: 8px 10px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.df-kv-label {
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--color-jmuted);
-}
-.df-kv-value {
-  margin-top: 3px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-jtext);
-  overflow-wrap: anywhere;
-}
-
-/* Two-column body (screen only — stacks for print at A4 width) */
-.df-cols {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
-}
-@media (min-width: 760px) {
-  .df-cols-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .df-cols-wide-left {
-    grid-template-columns: 1.5fr 1fr;
-  }
-}
-
-/* Technical tables — fixed layout so no column can overflow the page */
-.df-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-.df-table th {
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-jmuted);
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid rgba(57, 214, 232, 0.3);
-  overflow-wrap: anywhere;
-}
-.df-table td {
-  font-size: 12px;
-  line-height: 1.5;
-  padding: 7px 8px;
-  border-bottom: 1px solid rgba(23, 68, 81, 0.75);
-  vertical-align: top;
-  overflow-wrap: anywhere;
-}
-.df-table tbody tr {
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-
-/* Hash values — monospaced, never clipped, never truncated */
-.df-hash {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1.55;
-  color: var(--color-jmuted);
-  overflow-wrap: anywhere;
-  word-break: break-all;
-}
-
-/* Vertical technical timeline with cyan connector + status markers */
-.df-tl {
-  position: relative;
-  padding-left: 16px;
-}
-.df-tl::before {
-  content: "";
-  position: absolute;
-  left: 3.5px;
-  top: 5px;
-  bottom: 5px;
-  width: 1px;
-  background: rgba(57, 214, 232, 0.4);
-}
-.df-tl-item {
-  position: relative;
-  padding: 6px 0;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-.df-tl-item::before {
-  content: "";
-  position: absolute;
-  left: -16px;
-  top: 10px;
-  width: 7px;
-  height: 7px;
-  border: 1px solid var(--color-jcyan);
-  background: var(--color-jbg);
-}
-/* Inactive / informational marker — smaller, hollow, muted */
-.df-tl-item-muted::before {
-  border-color: var(--color-jmuted);
-}
-
-/* Severity grades — one colour per grade, never the same colour twice */
-.df-sev-critical {
-  color: #f15b64;
-  border-color: #f15b64;
-  background: rgba(241, 91, 100, 0.13);
-}
-.df-sev-high {
-  color: #f4794f;
-  border-color: #f4794f;
-  background: rgba(244, 121, 79, 0.13);
-}
-.df-sev-medium {
-  color: #ffaa45;
-  border-color: #ffaa45;
-  background: rgba(255, 170, 69, 0.13);
-}
-.df-sev-low {
-  color: #35d6a1;
-  border-color: #35d6a1;
-  background: rgba(53, 214, 161, 0.13);
-}
-.df-sev-none {
-  color: var(--color-jmuted);
-  border-color: var(--color-jborder);
-  background: transparent;
-}
-
-/* Integrity disclaimer — red rule, quiet body */
-.df-disclaimer {
-  border-left: 2px solid var(--color-jred);
-  padding-left: 12px;
-  font-size: 11.5px;
-  line-height: 1.65;
-  color: var(--color-jmuted);
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-
-/* Print-only running footer (repeats per page in Chromium) */
-.df-runfoot {
-  display: none;
-}
-
-@page {
-  size: A4;
-  margin: 14mm 12mm 16mm;
-}
-
-@media print {
-  .jaal-no-print {
-    display: none !important;
-  }
-  /* The dossier IS the printed page: force the dark skin to survive even
-     when the browser's "background graphics" option is on or off. */
-  html,
   body {
-    background: var(--color-jbg) !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  .jaal-grid {
-    background: var(--color-jbg) !important;
-  }
-
-  .df-sheet {
-    border: none;
-    max-width: none;
-    width: 100%;
     margin: 0;
-    padding: 0 !important;
-    /* Entrance animation must never be captured mid-flight by the printer */
-    opacity: 1 !important;
-    transform: none !important;
+    min-height: 100vh;
+    background-color: theme("colors.slate.950");
+    color: theme("colors.slate.100");
   }
 
-  /* Stack the evidence rail ahead of the numbered sections on paper */
-  .df-rail {
-    order: -1;
+  /* Focus outline tokens for accessible keyboard navigation */
+  :focus-visible {
+    outline: 3px solid theme("colors.ring.4");
+    outline-offset: 2px;
+    border-radius: 10px;
   }
 
-  .df-runfoot {
+  /* Reduced-motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* ------------------------------------------------------------------------
+   * Consumer theme — soft blue glassmorphism, applied by route via the class
+   * `.theme-consumer` on the root/layout wrapper.
+   *
+   * These re-map Tailwind semantic colour tokens ONLY inside consumer routes
+   * so the investigator dark forensic palette stays untouched.
+   * ------------------------------------------------------------------------ */
+
+  .theme-consumer {
+    --color-consumer-bg: #eaf3ff;
+    --color-consumer-bg-2: #dcebff;
+    --color-consumer-surface: #ffffff;
+    --color-consumer-glass: rgba(245, 249, 255, 0.72);
+    --color-consumer-glass-strong: rgba(255, 255, 255, 0.88);
+    --color-consumer-border: #c9ddf8;
+    --color-consumer-border-soft: rgba(40, 120, 215, 0.14);
+    --color-consumer-primary: #2878d7;
+    --color-consumer-primary-hover: #1d62b5;
+    --color-consumer-primary-soft: rgba(40, 120, 215, 0.10);
+    --color-consumer-deep: #12366f;
+    --color-consumer-mint: #bdef e1;
+    --color-consumer-mint-strong: #9fe6c9;
+    --color-consumer-teal: #159b78;
+    --color-consumer-teal-hover: #0e795f;
+    --color-consumer-muted: #60748f;
+    --color-consumer-text: #102d5c;
+    --color-consumer-text-soft: #3a5375;
+    --color-consumer-shadow: 0 1px 3px rgba(18, 54, 111, 0.06),
+      0 8px 30px rgba(18, 54, 111, 0.08);
+    --color-consumer-shadow-strong: 0 4px 12px rgba(18, 54, 111, 0.08),
+      0 24px 60px rgba(18, 54, 111, 0.10);
+    --color-consumer-radius: 22px;
+    --color-consumer-radius-sm: 14px;
+    --color-consumer-radius-pill: 999px;
+
+    color-scheme: light;
+    background-color: var(--color-consumer-bg);
+    color: var(--color-consumer-text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .theme-consumer ::selection {
+    background-color: rgba(40, 120, 215, 0.18);
+    color: var(--color-consumer-deep);
+  }
+
+  /* Glass card — the signature surface */
+  .glass {
+    background: var(--color-consumer-glass);
+    backdrop-filter: blur(10px) saturate(1.05);
+    -webkit-backdrop-filter: blur(10px) saturate(1.05);
+    border: 1px solid var(--color-consumer-border);
+    box-shadow: var(--color-consumer-shadow);
+    border-radius: var(--color-consumer-radius);
+  }
+
+  .glass-strong {
+    background: var(--color-consumer-glass-strong);
+    backdrop-filter: blur(14px) saturate(1.1);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    border: 1px solid var(--color-consumer-border);
+    box-shadow: var(--color-consumer-shadow-strong);
+    border-radius: var(--color-consumer-radius);
+  }
+
+  /* Soft blue gradient surface */
+  .gradient-sky {
+    background: linear-gradient(180deg, var(--color-consumer-bg-2) 0%, var(--color-consumer-bg) 100%);
+  }
+
+  /* Interactive pill highlight for active nav destinations */
+  .pill-active {
+    background: linear-gradient(90deg, var(--color-consumer-primary) 0%, var(--color-consumer-deep) 100%);
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(31, 79, 138, 0.18);
+  }
+
+  /* Teal positive CTA */
+  .btn-teal {
+    background: linear-gradient(180deg, var(--color-consumer-teal) 0%, var(--color-consumer-teal-hover) 100%);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(21, 155, 120, 0.22);
+  }
+
+  .btn-teal:focus-visible {
+    outline: 3px solid var(--color-consumer-teal);
+    outline-offset: 2px;
+  }
+
+  /* Primary CTA */
+  .btn-primary {
+    background: linear-gradient(180deg, var(--color-consumer-primary) 0%, var(--color-consumer-deep) 100%);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(31, 79, 138, 0.22);
+  }
+
+  /* Mint CTA for reassurance / positive actions */
+  .btn-mint {
+    background: linear-gradient(180deg, var(--color-consumer-mint-strong) 0%, var(--color-consumer-mint) 100%);
+    color: var(--color-consumer-deep);
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(159, 230, 201, 0.4);
+  }
+
+  /* Subtle decorative blur blob */
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0.35;
+    filter: blur(50px);
+    background: var(--color-consumer-primary-soft);
+  }
+
+  /* Status chips */
+  .chip {
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--color-consumer-radius-pill);
+    border: 1px solid var(--color-consumer-border);
+    background: var(--color-consumer-glass-strong);
+    color: var(--color-consumer-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  /* Scam category tile for the "All Destinations" panel */
+  .tile {
+    border: 1px solid var(--color-consumer-border);
+    background: var(--color-consumer-glass-strong);
+    border-radius: var(--color-consumer-radius);
+    box-shadow: var(--color-consumer-shadow);
+    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease,
+      background 120ms ease, color 120ms ease;
+    cursor: pointer;
+    text-align: left;
+    color: var(--color-consumer-text-soft);
     display: flex;
-    position: fixed;
-    bottom: -11mm;
-    left: 0;
-    right: 0;
-    justify-content: space-between;
-    gap: 10px;
-    font-family: var(--font-mono);
-    font-size: 7.5px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--color-jmuted);
-    border-top: 1px solid var(--color-jborder);
-    padding-top: 3px;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1.25rem 1.1rem;
   }
 
-  .df-tl-item,
-  .df-disclaimer,
-  .df-kv-cell,
-  .df-table tbody tr {
-    break-inside: avoid;
-    page-break-inside: avoid;
+  .tile:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--color-consumer-shadow-strong);
+    border-color: var(--color-consumer-primary);
   }
 
-  /* Navigation affordances carry no meaning on paper */
-  a {
-    color: inherit;
-    text-decoration: none;
+  .tile:focus-visible {
+    outline: 3px solid var(--color-consumer-primary);
+    outline-offset: 3px;
+  }
+
+  .tile.active {
+    background: linear-gradient(180deg, var(--color-consumer-primary) 0%, var(--color-consumer-deep) 100%);
+    border-color: transparent;
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(31, 79, 138, 0.18);
+  }
+
+  .tile.active .tile-label {
+    color: #ffffff;
+  }
+
+  .tile-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--color-consumer-primary-soft);
+    color: var(--color-consumer-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .tile.active .tile-icon {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+  }
+
+  .tile-label {
+    font-weight: 600;
+    color: var(--color-consumer-text);
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
   }
 }

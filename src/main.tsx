@@ -32,6 +32,29 @@ const ReportsPage = lazy(() => import("./pages/ReportsPage.tsx"));
 const ReportDetailPage = lazy(() => import("./pages/ReportDetailPage.tsx"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage.tsx"));
 
+// Consumer routes (blue glassmorphism, Normal People experience).
+const ConsumerLayout = lazy(
+  () => import("./pages/consumer/Layout.tsx"),
+);
+const ConsumerDashboardPage = lazy(
+  () => import("./pages/consumer/Dashboard.tsx"),
+);
+const ConsumerReportPage = lazy(
+  () => import("./pages/consumer/Report.tsx"),
+);
+const ConsumerReportsPage = lazy(
+  () => import("./pages/consumer/Reports.tsx"),
+);
+const ConsumerReportDetailPage = lazy(
+  () => import("./pages/consumer/ReportDetail.tsx"),
+);
+const ConsumerProtectedPage = lazy(
+  () => import("./pages/consumer/Protected.tsx"),
+);
+const ConsumerProfilePage = lazy(
+  () => import("./pages/consumer/Profile.tsx"),
+);
+
 // Simple loading fallback for route transitions
 function RouteLoading() {
   return (
@@ -144,6 +167,8 @@ createRoot(document.getElementById("root")!).render(
                     element={<AuthPage redirectAfterAuth="/dashboard" />}
                   />
                   <Route path="/login" element={<LoginPage />} />
+
+                  {/* Investigator routes — existing dark forensic shell, untouched. */}
                   <Route
                     element={
                       <RequireAuth>
@@ -165,6 +190,41 @@ createRoot(document.getElementById("root")!).render(
                     <Route path="/reports/:id" element={<ReportDetailPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                   </Route>
+
+                  {/* Consumer routes — blue glassmorphism, Normal People experience. */}
+                  <Route
+                    element={
+                      <RequireAuth>
+                        <ConsumerLayout />
+                      </RequireAuth>
+                    }
+                  >
+                    <Route
+                      path="/consumer/dashboard"
+                      element={<ConsumerDashboardPage />}
+                    />
+                    <Route
+                      path="/consumer/report"
+                      element={<ConsumerReportPage />}
+                    />
+                    <Route
+                      path="/consumer/reports"
+                      element={<ConsumerReportsPage />}
+                    />
+                    <Route
+                      path="/consumer/reports/:id"
+                      element={<ConsumerReportDetailPage />}
+                    />
+                    <Route
+                      path="/consumer/protected"
+                      element={<ConsumerProtectedPage />}
+                    />
+                    <Route
+                      path="/consumer/profile"
+                      element={<ConsumerProfilePage />}
+                    />
+                  </Route>
+
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

@@ -82,6 +82,63 @@ export const consumerDashboard = query({
   },
 });
 
+/** Evidence rows attached to a consumer report (owner-scoped). */
+export const getConsumerEvidence = query({
+  args: {
+    investigationId: v.id("investigations"),
+  },
+  handler: async (ctx, args) => {
+    const owner = await getOwner(ctx);
+    const inv = await ctx.db
+      .query("investigations")
+      .withIndex("by_owner_case", (q) =>
+        q.eq("owner", owner).eq("caseId", args.investigationId),
+      )
+      .unique();
+    if (!inv) return [];
+    const rows = await ctx.db
+      .query("evidence")
+      .withIndex("by_investigation", (q) =>
+        q.eq("investigationId", inv._id),
+      )
+      .collect();
+    return rows
+      .filter((e) => e.owner === owner)
+      .map((e) => ({
+        _id: e._id,
+        investigationId: e.investigationId,
+        owner: e.owner,
+        caseId: e.caseId,
+        sourceMessageId: e.sourceMessageId,
+        sourceMessageText: e.sourceMessageText,
+        label: e.label,
+        evidenceType: e.evidenceType,
+        extractedValue: e.extractedValue,
+        normalizedValue: e.normalizedValue,
+        content: e.content,
+        extractionMethod: e.extractionMethod,
+        extractionTimestamp: e.extractionTimestamp,
+        confidence: e.confidence,
+        integrityHash: e.integrityHash,
+        integrityAlgorithm: e.integrityAlgorithm,
+        integrityStatus: e.integrityStatus,
+        hashGeneratedAt: e.hashGeneratedAt,
+        notes: e.notes,
+        tampered: e.tampered,
+        originalContent: e.originalContent,
+        contentHistory: e.contentHistory,
+        hashHistory: e.hashHistory,
+        verificationHistory: e.verificationHistory,
+        manifest: e.manifest,
+        manifestHash: e.manifestHash,
+        reviewStatus: e.reviewStatus,
+        reviewNote: e.reviewNote,
+        reviewedAt: e.reviewedAt,
+        createdAt: e.createdAt,
+      }));
+  },
+});
+
 /** Flat list of a consumer's reports (investigations) newest first. */
 export const consumerReports = query({
   args: {},
