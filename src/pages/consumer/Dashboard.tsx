@@ -2,8 +2,7 @@ import { useQuery } from "convex/react";
 import { Link } from "react-router";
 
 // Pre-computed slider offsets used to position floating consumer controls
-// without overlapping the fixed header / sidebar.
-const LAUNCHER_BOTTOM_OFFSET = 180;import {
+import {
   MessageSquare,
   Phone,
   Receipt,
@@ -16,11 +15,11 @@ const LAUNCHER_BOTTOM_OFFSET = 180;import {
   Shield,
   Plus,
   Leaf,
-  User,
   AlertTriangle,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import Assistant from "./Assistant";
+
 
 export default function ConsumerDashboardPage() {
   const dashboard = useQuery(api.consumer.consumerDashboard);

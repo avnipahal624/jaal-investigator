@@ -63,22 +63,76 @@ const DESTINATIONS = [
 ];
 
 export default function ConsumerLayout({ children }: { children?: ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [destinationsOpen, setDestinationsOpen] = useState(false);
-  const { isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-  const sheetRef = useRef<HTMLDialogElement>(null);
-
   // Guard: the consumer dashboard is scoped to the Normal People experience.
   // Investigator accounts are not routed here — their real authority lives in
   // the backend (`users.role`) and the investigator console owns those routes.
   // If the identity carrying us here is not a consumer, bounce straight to the
-  // shared sign-in screen with the return path preserved.
-  if (!isAuthenticated) {
-    return <Outlet />;
-  }
-
   const isActive = useCallback(
+    (href: string) => {
+      if (href === "/consumer/dashboard") return location.pathname === "/consumer/dashboard";
+      return location.pathname.startsWith(href);
+    },
+    [],
+  );
+
+  const closeOnOutside = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      const target = event.target as Node | null;
+      if (target && !sheetRef.current?.contains(target)) {
+        setMobileOpen(false);
+        setDestinationsOpen(false);
+      }
+    },
+    [],
+  );
+
+  // Close sheets when a route is chosen.
+  useEffect(() => {
+    // Close the mobile sheet whenever the route changes to a real consumer
+    // page. We schedule the state update asynchronously (via requestAnimationFrame)
+    // so the effect body itself does not call setState synchronously.
+    if (location.pathname.startsWith("/consumer/")) {
+      const raf = window.requestAnimationFrame(() => {
+        setMobileOpen(false);
+        setDestinationsOpen(false);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, []);
+
+  // Body scroll lock + Escape handling for the mobile sheet.
+  useEffect(() => {
+    if (mobileOpen || destinationsOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen, destinationsOpen]);
+
+  useEffect(() => {
+    const handle = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        setDestinationsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, []);
+
+  const renderSidebar = () => (
+    // Investigator accounts are not routed here — their real authority lives in
+    // the backend (`users.role`) and the investigator console owns those routes.
+    // If the identity carrying us here is not a consumer, bounce straight to the
+    // shared sign-in screen with the return path preserved.
+    if (!isAuthenticated) {
+      return <Outlet />;
+    }
+
+    const isActive = useCallback(
     (href: string) => {
       if (href === "/consumer/dashboard") return location.pathname === "/consumer/dashboard";
       return location.pathname.startsWith(href);

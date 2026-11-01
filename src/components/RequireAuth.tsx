@@ -31,9 +31,6 @@ export function RequireConsumer({
   description?: string;
 }) {
   const { isLoading, isAuthenticated } = useAuth();
-
-  // Authentication first, then the consumer-role check.
-  const navigate = useNavigate();
   if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background">
@@ -66,10 +63,8 @@ export function RequireAuth({
   redirectImmediately?: boolean;
 }) {
   const { isLoading, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-  // A local demo session is only a UI label (name, email, "simulation"
+  // A local demo session is only a UI label (name, email, "simulation");
   // badge) — it is not an identity. Every case-scoped query is owner-checked
-  // server-side, so rendering children before Convex Auth has resolved an
   // identity makes those queries reject and takes the whole route tree down
   // with them. Wait for the real identity, then block if there isn't one.
   if (isLoading) {
@@ -107,13 +102,13 @@ export function RequireAuth({
             You'll come straight back to this page once you're signed in.
           </CardContent>
           <CardFooter className="flex flex-col gap-2">
-            <Button className="w-full cursor-pointer" onClick={() => navigate(signInHref)}>
+            <Button className="w-full cursor-pointer" onClick={() => signInHref}>
               Sign in
             </Button>
             <Button
               variant="outline"
               className="w-full cursor-pointer gap-2 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
-              onClick={() => navigate(simulationHref)}
+              onClick={() => simulationHref}
             >
               <Radio className="size-4" />
               Open simulation login
@@ -121,7 +116,7 @@ export function RequireAuth({
             <Button
               variant="ghost"
               className="w-full cursor-pointer text-muted-foreground"
-              onClick={() => navigate("/")}
+              onClick={() => "/"}
             >
               Back to home
             </Button>
