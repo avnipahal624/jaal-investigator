@@ -5,6 +5,7 @@ import {
   Fingerprint,
   FolderKanban,
   LayoutDashboard,
+  Mic,
   Plus,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -15,6 +16,7 @@ const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/investigations", label: "Investigations", icon: FolderKanban },
   { to: "/evidence", label: "Evidence Locker", icon: Fingerprint },
+  { to: "/voice-intake", label: "Voice Intake", icon: Mic },
   { to: "/reports", label: "Reports", icon: FileText },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];

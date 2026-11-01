@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import {
   MessageSquare,
   Phone,
+  Mic,
   Receipt,
   LinkIcon,
   HelpCircle,
@@ -185,6 +186,12 @@ export default function ConsumerDashboardPage() {
                   label: "Suspicious Phone Call",
                   icon: Phone,
                   to: "/consumer/report?category=call",
+                },
+                {
+                  key: "voice",
+                  label: "Voice Call Scam",
+                  icon: Mic,
+                  to: "/consumer/voice",
                 },
                 {
                   key: "payment",
