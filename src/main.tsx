@@ -67,8 +67,11 @@ const ConsumerVoiceIntakePage = lazy(
 // Simple loading fallback for route transitions
 function RouteLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground">Loading...</div>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+        <span className="size-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        <span className="animate-pulse text-sm">Loading…</span>
+      </div>
     </div>
   );
 }
