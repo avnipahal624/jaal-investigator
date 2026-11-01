@@ -148,7 +148,8 @@ function VoiceIntakeQueue({ isInvestigator }: { isInvestigator: boolean }) {
 // ---------------------------------------------------------------------------
 // Detail — full detail for one voice intake recording.
 // Investigators see everything; consumers see only their own submission.
-// ---------------------------------------------------------------------------function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_recordings"> }) {
+// ---------------------------------------------------------------------------
+function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_recordings"> }) {
   const detail = useQuery(api.voice.getVoiceRecording, { recordingId });
   const audio = useQuery(
     api.voice.getAudioUrl,
