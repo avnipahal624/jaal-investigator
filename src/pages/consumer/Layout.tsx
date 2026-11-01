@@ -1,11 +1,6 @@
-import {
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-  type ReactNode,
-} from "react";
-import { Outlet, useNavigate } from "react-router";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import { Plus } from "lucide-react";
+import { Outlet, Link, useNavigate } from "react-router";
 
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -19,41 +14,13 @@ import {
   ChevronRight,
   HelpCircle,
 } from "lucide-react";
+import { api } from "@/convex/_generated/api";
+
+import { CATEGORIES } from "./Report";
+import ConsumerReportPage from "./Report";
+
 
 const NAV_ITEMS = [
-  {
-    id: "home",
-    label: "Home",
-    href: "/consumer/dashboard",
-    icon: House,
-  },
-  {
-    id: "report",
-    label: "Report a Scam",
-    href: "/consumer/report",
-    icon: FileWarning,
-  },
-  {
-    id: "reports",
-    label: "My Reports",
-    href: "/consumer/reports",
-    icon: FileCheck,
-  },
-  {
-    id: "protected",
-    label: "Stay Protected",
-    href: "/consumer/protected",
-    icon: Shield,
-  },
-  {
-    id: "profile",
-    label: "Profile",
-    href: "/consumer/profile",
-    icon: User,
-  },
-];
-
-const DESTINATIONS = [
   { id: "home", label: "Home", href: "/consumer/dashboard", icon: House },
   { id: "report", label: "Report a Scam", href: "/consumer/report", icon: FileWarning },
   { id: "reports", label: "My Reports", href: "/consumer/reports", icon: FileCheck },
@@ -63,76 +30,22 @@ const DESTINATIONS = [
 ];
 
 export default function ConsumerLayout({ children }: { children?: ReactNode }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [destinationsOpen, setDestinationsOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const sheetRef = useRef<HTMLDialogElement>(null);
+
   // Guard: the consumer dashboard is scoped to the Normal People experience.
   // Investigator accounts are not routed here — their real authority lives in
   // the backend (`users.role`) and the investigator console owns those routes.
   // If the identity carrying us here is not a consumer, bounce straight to the
+  // shared sign-in screen with the return path preserved.
+  if (!isAuthenticated) {
+    return <Outlet />;
+  }
+
   const isActive = useCallback(
-    (href: string) => {
-      if (href === "/consumer/dashboard") return location.pathname === "/consumer/dashboard";
-      return location.pathname.startsWith(href);
-    },
-    [],
-  );
-
-  const closeOnOutside = useCallback(
-    (event: React.MouseEvent<HTMLElement>) => {
-      const target = event.target as Node | null;
-      if (target && !sheetRef.current?.contains(target)) {
-        setMobileOpen(false);
-        setDestinationsOpen(false);
-      }
-    },
-    [],
-  );
-
-  // Close sheets when a route is chosen.
-  useEffect(() => {
-    // Close the mobile sheet whenever the route changes to a real consumer
-    // page. We schedule the state update asynchronously (via requestAnimationFrame)
-    // so the effect body itself does not call setState synchronously.
-    if (location.pathname.startsWith("/consumer/")) {
-      const raf = window.requestAnimationFrame(() => {
-        setMobileOpen(false);
-        setDestinationsOpen(false);
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-  }, []);
-
-  // Body scroll lock + Escape handling for the mobile sheet.
-  useEffect(() => {
-    if (mobileOpen || destinationsOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [mobileOpen, destinationsOpen]);
-
-  useEffect(() => {
-    const handle = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMobileOpen(false);
-        setDestinationsOpen(false);
-      }
-    };
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
-  }, []);
-
-  const renderSidebar = () => (
-    // Investigator accounts are not routed here — their real authority lives in
-    // the backend (`users.role`) and the investigator console owns those routes.
-    // If the identity carrying us here is not a consumer, bounce straight to the
-    // shared sign-in screen with the return path preserved.
-    if (!isAuthenticated) {
-      return <Outlet />;
-    }
-
-    const isActive = useCallback(
     (href: string) => {
       if (href === "/consumer/dashboard") return location.pathname === "/consumer/dashboard";
       return location.pathname.startsWith(href);
@@ -227,8 +140,7 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
                     // setState synchronously in the route-change effect.
                     if (window.innerWidth < 1280) {
                       event.preventDefault();
-                      navigate(item.href, { replace: true });
-                      setMobileOpen(false);
+                      navigate(item.href);
                     }
                   }}
                   className={`group relative flex items-center gap-3 px-2 xl:px-3 py-2.5 xl:py-3 rounded-xl text-sm transition-all duration-150 ${
@@ -282,206 +194,291 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
           <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-xs font-semibold">
             AD
           </span>
-          <span className="hidden sm:inline">All Destinations</span>
-          <ChevronRight className="w-[14px] h-[14px]" />
+          <span className="text-sm font-medium text-[var(--color-consumer-muted)]">
+            All Destinations
+          </span>
+          <ChevronRight className="w-4 h-4" />
         </button>
       </div>
     );
 
-    return Desktop;
-  };
-
-  const renderMobileSheet = () => (
-    <dialog
-      ref={sheetRef}
-      className="modal-body fixed inset-x-4 bottom-0 z-50 rounded-t-3xl glass-strong shadow-2xl outline-none border border-[var(--color-consumer-border)] w-[calc(100%-2rem)] max-w-lg"
-      open={mobileOpen}
-      onClick={(event) => event.stopPropagation()}
-      aria-label="Navigation"
-    >
-      {/* Handle */}
-      <div className="flex justify-center pt-3 pb-1">
-        <span className="w-8 h-1 rounded-full bg-[var(--color-consumer-border)]" />
-      </div>
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-[var(--color-consumer-primary)] text-white flex items-center justify-center text-sm font-semibold">
-            J
-          </div>
-          <span className="text-[var(--color-consumer-deep)] font-semibold text-base">
-            JAAL
-          </span>
-        </div>
+    const mobile = (
+      <div className="flex-1 overflow-y-auto px-2 xl:px-0">
         <button
           type="button"
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-consumer-muted)] hover:bg-[var(--color-consumer-primary-soft)] transition-colors"
-          onClick={() => setMobileOpen(false)}
-          aria-label="Close navigation"
+          className={"w-full flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-xl text-sm font-medium text-left transition-colors " + (
+            destinationsOpen
+              ? "text-white bg-[var(--color-consumer-primary)]"
+              : "text-[var(--color-consumer-muted)] hover:text-[var(--color-consumer-text)] hover:bg-[var(--color-consumer-primary-soft)]"
+          )}
+          onClick={() => setDestinationsOpen(!destinationsOpen)}
+          aria-expanded={destinationsOpen}
+          aria-haspopup="dialog"
         >
-          <X className="w-5 h-5" />
+          <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-xs font-semibold">
+            AD
+          </span>
+          All Destinations
         </button>
       </div>
+    );
 
-      {/* Scrollable destinations */}
-      <div className="max-h-[60vh] overflow-y-auto px-4 pb-6 space-y-2 scrollbar-thin">
-        {DESTINATIONS.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.href);
-          return (
+    return (
+      <dialog
+        ref={sheetRef}
+        className={`fixed inset-0 z-50 flex flex-col ${destinationsOpen ? "flex" : "hidden"}`}
+        onPointerDown={(event) => {
+          // Close the destinations sheet when clicking outside it.
+          if (event.target === event.currentTarget) {
+            setDestinationsOpen(false);
+          }
+        }}
+      >
+        <div className="flex flex-col border-b border-[var(--color-consumer-border)] px-4 xl:px-6 py-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-[var(--color-consumer-deep)]">
+              All Destinations
+            </h2>
             <button
-              key={item.id}
               type="button"
-              className={`tile w-full text-left ${
-                active ? "active" : ""
-              }`}
-              onClick={() => navigate(item.href)}
+              className="text-[var(--color-consumer-muted)] hover:text-[var(--color-consumer-text)] transition-colors"
+              onClick={() => setDestinationsOpen(false)}
+              aria-label="Close destinations sheet"
             >
-              <span className="tile-icon" aria-hidden="true">
-                <Icon
-                  className={`w-5 h-5 ${
-                    active ? "text-white" : "text-[var(--color-consumer-primary)]"
-                  }`}
-                  strokeWidth={1.85}
-                />
-              </span>
-              <span className="tile-label">{item.label}</span>
+              <X className="w-5 h-5" />
             </button>
-          );
-        })}
-      </div>
-    </dialog>
-  );
+          </div>
+          <div className="mt-2">
+            {window.innerWidth >= 1280 ? Desktop : mobile}
+          </div>
+        </div>
+        {destinationsOpen && (
+          <div className="flex-1 overflow-y-auto p-4 xl:p-6">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-3 xl:gap-4">
+              {CATEGORIES.map((dest) => {
+      const Icon = dest.icon;
+      return (
+                <div
+                  key={dest.key}
+                  className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-card)] p-3 xl:p-4 cursor-pointer transition-all hover:bg-[var(--color-consumer-primary-soft)] hover:border-[var(--color-consumer-primary)]"
+                  onClick={() => {
+                    setDestinationsOpen(false);
+                    navigate(`/consumer/report?category=${dest.key}`);
+                  }}
+                >
+                  <div className="flex items-center gap-2.5 mb-2.5">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-sm font-semibold">
+                      {dest.icon}
+                    </span>
+                    <span className="text-sm font-medium text-[var(--color-consumer-deep)]">
+                      {dest.label}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--color-consumer-muted)] leading-relaxed">
+                  {dest.description}
+                </p>
+              </div>
+            ))}
+          )}
+            </div>
+          </div>
+        )}
+      </dialog>
+    );
+  };
 
-  const renderDestinationsSheet = () => (
+  const renderReportDialog = () => (
     <dialog
-      className="modal-body fixed inset-0 z-50 flex items-center justify-center p-4"
-      open={destinationsOpen}
-      onClick={(event) => {
+      ref={sheetRef}
+      className={`fixed inset-0 z-50 flex flex-col ${mobileOpen ? "flex" : "hidden"}`}
+      onPointerDown={(event) => {
         if (event.target === event.currentTarget) {
-          setDestinationsOpen(false);
+          setMobileOpen(false);
         }
       }}
-      aria-modal="true"
-      aria-labelledby="destinations-title"
     >
-      <div className="glass-strong p-6 w-full max-w-xl max-h-[85vh] rounded-3xl shadow-2xl flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-[var(--color-consumer-deep)]">
-              All Destinations
-            </span>
-          </div>
+      <div className="flex flex-col border-b border-[var(--color-consumer-border)] px-4 xl:px-6 py-3 bg-[var(--color-consumer-card)]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[var(--color-consumer-deep)]">
+            Report a Scam
+          </h2>
           <button
             type="button"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-consumer-muted)] hover:bg-[var(--color-consumer-primary-soft)] transition-colors"
-            onClick={() => setDestinationsOpen(false)}
-            aria-label="Close destinations"
+            className="text-[var(--color-consumer-muted)] hover:text-[var(--color-consumer-text)] transition-colors"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close report dialog"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        <div className="grid grid-cols-2 gap-3 overflow-y-auto max-h-[70vh] scrollbar-thin">
-          {DESTINATIONS.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.href);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={`tile h-auto ${
-                  active ? "active" : ""
-                }`}
-                onClick={() => {
-                  navigate(item.href);
-                  setDestinationsOpen(false);
-                }}
-              >
-                <span className="tile-icon" aria-hidden="true">
-                  <Icon
-                    className={`w-5 h-5 ${
-                      active ? "text-white" : "text-[var(--color-consumer-primary)]"
-                    }`}
-                    strokeWidth={1.85}
-                  />
-                </span>
-                <span className="tile-label">{item.label}</span>
-              </button>
-            );
-          })}
+        <div className="mt-3 flex flex-col gap-2">
+          {CATEGORIES.map((category) => (
+            <button
+              key={category.key}
+              type="button"
+              className="w-full flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-xl text-sm font-medium text-left transition-colors hover:bg-[var(--color-consumer-primary-soft)]"
+              onClick={() => {
+                setMobileOpen(false);
+                navigate(`/consumer/report?category=${category.key}`);
+              }}
+            >
+              <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-xs font-semibold">
+                {category.icon}
+              </span>
+              <span className="text-sm font-medium text-[var(--color-consumer-deep)]">
+                {category.label}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
+      {mobileOpen && (
+        <div className="flex-1 overflow-y-auto p-4 xl:p-6">            <ConsumerReportPage />
+
+        </div>
+      )}
     </dialog>
   );
 
-  const mobileHeader = (
-    <header className="fixed top-0 inset-x-0 z-30 flex items-center justify-between px-4 py-3 bg-[var(--color-consumer-glass-strong)] backdrop-blur-xl border-b border-[var(--color-consumer-border)]">
-      <div className="flex items-center gap-3">
+  return (
+    <div className="min-h-screen bg-[var(--color-consumer-bg)] text-[var(--color-consumer-text)]">
+      {/* Header — fixed, overlays the mobile sidebar when open */}
+      <header className="fixed top-0 right-0 left-0 z-40 flex items-center gap-4 px-4 xl:px-8 h-[3.5rem] border-b border-[var(--color-consumer-border)] bg-[var(--color-consumer-card)]">
         <button
           type="button"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--color-consumer-muted)] hover:bg-[var(--color-consumer-primary-soft)] transition-colors"
+          className="flex items-center justify-center w-9 h-9 rounded-lg text-[var(--color-consumer-muted)] hover:text-[var(--color-consumer-text)] hover:bg-[var(--color-consumer-primary-soft)] transition-colors lg:hidden"
           onClick={() => setMobileOpen(true)}
           aria-label="Open navigation"
         >
           <Menu className="w-5 h-5" />
         </button>
-        <a href="/consumer/dashboard" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[var(--color-consumer-primary)] text-white flex items-center justify-center text-sm font-semibold">
-            J
+        <div className="flex-1 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[var(--color-consumer-primary)] text-white flex items-center justify-center text-lg font-semibold shadow-md">
+              J
+            </div>
+            <span className="text-base font-semibold text-[var(--color-consumer-deep)]">
+              JAAL
+            </span>
           </div>
-          <span className="text-[var(--color-consumer-deep)] font-semibold text-sm">
-            JAAL
+          <span className="hidden xl:block text-sm text-[var(--color-consumer-muted)] font-medium">
+            Report · Understand · Stay Safe
           </span>
-        </a>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="rounded-xl px-3 py-1.5 text-xs font-medium text-[var(--color-consumer-muted)] hover:bg-[var(--color-consumer-primary-soft)] transition-colors"
-          onClick={() => setDestinationsOpen(true)}
-          aria-haspopup="dialog"
-        >
-          All Destinations
-        </button>
-      </div>
-    </header>
-  );
-
-  return (
-    <div className="theme-consumer min-h-screen flex">
-      {/* Desktop sidebar */}
-      {renderSidebar()}
-
-      {/* Desktop destinations pill */}
-      {renderAllDestinations()}
-
-      {/* Mobile header + sheet */}
-      <div className="fixed inset-0 pointer-events-none z-0" aria-hidden="true">
-        <div
-          className="absolute inset-0 pointer-events-auto"
-          onClick={closeOnOutside}
-        />
-      </div>
-      {renderMobileSheet()}
-      {destinationsOpen && renderDestinationsSheet()}
-
-      {/* Mobile header only visible below xl */}
-      <div className="lg:hidden" aria-hidden={mobileOpen}>
-        {mobileHeader}
-      </div>
-
-      {/* Main content */}
-      <main
-        className="flex-1 min-h-screen pt-20 lg:pt-0 xl:pt-0 pb-20 lg:pb-0 overflow-y-auto"
-        style={{ paddingLeft: "calc(78px + 1rem)", paddingRight: "1rem" }}
-      >
-        <div className="px-4 lg:px-6 xl:px-8 py-6 max-w-7xl mx-auto w-full">
-          {children ?? <Outlet />}
         </div>
-      </main>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/consumer/report"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium text-[var(--color-consumer-primary)] hover:bg-[var(--color-consumer-primary)]/10 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden xl:inline">Report a Scam</span>
+          </Link>
+          <Link
+            to="/consumer/protected"
+            className="flex items-center justify-center w-9 h-9 rounded-xl border border-[var(--color-consumer-border)] text-[var(--color-consumer-muted)] hover:text-[var(--color-consumer-text)] hover:bg-[var(--color-consumer-primary-soft)] hover:border-[var(--color-consumer-primary)] transition-colors"
+          >
+            <Shield className="w-4 h-4" />
+          </Link>
+        </div>
+      </header>
+
+      {/* Mobile sheet — slide-in navigation */}
+      {mobileOpen && (
+        <dialog
+          ref={sheetRef}
+          className="fixed inset-0 z-50 flex flex-col bg-[var(--color-consumer-card)]"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setMobileOpen(false);
+            }
+          }}
+        >
+          <div className="flex flex-col border-b border-[var(--color-consumer-border)] px-4 xl:px-6 py-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-[var(--color-consumer-deep)]">
+                JAAL
+              </h2>
+              <button
+                type="button"
+                className="text-[var(--color-consumer-muted)] hover:text-[var(--color-consumer-text)] transition-colors"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close navigation"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mt-2 flex-1 overflow-y-auto">
+              <nav className="flex flex-col gap-2">
+                {NAV_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.href);
+                  return (
+                    <a
+                      key={item.id}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={`flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-xl text-sm font-medium transition-colors ${active ? "bg-[var(--color-consumer-primary)] text-white" : "text-[var(--color-consumer-muted)] hover:text-[var(--color-consumer-text)] hover:bg-[var(--color-consumer-primary-soft)]"}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {item.label}
+                    </a>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-2 xl:px-0">
+            <div className="px-2 xl:px-3 pb-3 flex flex-col gap-2">
+              <Link
+                to="/consumer/report"
+                className="w-full flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-xl text-sm font-medium text-left transition-colors hover:bg-[var(--color-consumer-primary-soft)]"
+              >
+                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-xs font-semibold">
+                  <Menu className="w-3 h-3" />
+                </span>
+                <span className="text-sm font-medium text-[var(--color-consumer-deep)]">
+                  Report a Scam
+                </span>
+              </Link>
+              <Link
+                to="/consumer/protected"
+                className="w-full flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-xl text-sm font-medium text-left transition-colors hover:bg-[var(--color-consumer-primary-soft)]"
+              >
+                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-xs font-semibold">
+                  <Shield className="w-3 h-3" />
+                </span>
+                <span className="text-sm font-medium text-[var(--color-consumer-deep)]">
+                  Stay Protected
+                </span>
+              </Link>
+              <Link
+                to="/consumer/profile"
+                className="w-full flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-xl text-sm font-medium text-left transition-colors hover:bg-[var(--color-consumer-primary-soft)]"
+              >
+                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-xs font-semibold">
+                  <User className="w-3 h-3" />
+                </span>
+                <span className="text-sm font-medium text-[var(--color-consumer-deep)]">
+                  Profile
+                </span>
+              </Link>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Page content — offset for the fixed header */}
+      <main className="pt-[3.5rem] min-h-screen">{children}</main>
+
+      {/* Floating JAAL Safety Assistant (fixed, no layout impact) */}
+
+      {/* Report dialog — mobile sheet */}
+      {renderReportDialog()}
+
+      {/* All Destinations — desktop dropdown + mobile dialog */}
+      {renderAllDestinations()}
     </div>
   );
 }
+
+

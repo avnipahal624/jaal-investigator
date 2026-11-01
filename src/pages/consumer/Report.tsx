@@ -1,4 +1,16 @@
 import { useState, useEffect, useRef } from "react";
+import type { ForwardRefExoticComponent, RefAttributes } from "react";
+
+type Step = "category" | "details" | "review" | "success";
+type FileType = File;
+
+const FILE_MAX_BYTES = 4 * 1024 * 1024;
+const ALLOWED_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+];
 import { useMutation } from "convex/react";
 import { Link, useSearchParams } from "react-router";
 import {
@@ -18,9 +30,9 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 
-type ConsumerCategoryKey = "message" | "call" | "payment" | "link" | "other";
 
-const CATEGORIES = [
+
+export const CATEGORIES = [
   {
     key: "message" as const,
     label: "Suspicious Message",
@@ -53,15 +65,8 @@ const CATEGORIES = [
   },
 ];
 
-type Step = "category" | "details" | "review" | "success";
+export type ConsumerCategoryKey = "message" | "call" | "payment" | "link" | "other";
 
-const FILE_MAX_BYTES = 4 * 1024 * 1024;
-const ALLOWED_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-];
 
 export default function ConsumerReportPage() {
   const [searchParams] = useSearchParams();
