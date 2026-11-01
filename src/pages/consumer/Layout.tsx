@@ -5,7 +5,8 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router";
+import { Outlet, useNavigate } from "react-router";
+
 import { useAuth } from "@/hooks/use-auth";
 import {
   House,
@@ -64,7 +65,7 @@ const DESTINATIONS = [
 export default function ConsumerLayout({ children }: { children?: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [destinationsOpen, setDestinationsOpen] = useState(false);
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const sheetRef = useRef<HTMLDialogElement>(null);
 
@@ -73,8 +74,7 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
   // the backend (`users.role`) and the investigator console owns those routes.
   // If the identity carrying us here is not a consumer, bounce straight to the
   // shared sign-in screen with the return path preserved.
-  const isConsumer = Boolean(isAuthenticated);
-  if (!isConsumer) {
+  if (!isAuthenticated) {
     return <Outlet />;
   }
 
@@ -83,7 +83,7 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
       if (href === "/consumer/dashboard") return location.pathname === "/consumer/dashboard";
       return location.pathname.startsWith(href);
     },
-    [location.pathname],
+    [],
   );
 
   const closeOnOutside = useCallback(
@@ -100,7 +100,7 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
   // Close sheets when a route is chosen.
   useEffect(() => {
     // Close the mobile sheet whenever the route changes to a real consumer
-    // page. We schedule the state update asynchronously (via setTimeout(0))
+    // page. We schedule the state update asynchronously (via requestAnimationFrame)
     // so the effect body itself does not call setState synchronously.
     if (location.pathname.startsWith("/consumer/")) {
       const raf = window.requestAnimationFrame(() => {
@@ -109,7 +109,7 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
       });
       return () => cancelAnimationFrame(raf);
     }
-  }, [location.pathname]);
+  }, []);
 
   // Body scroll lock + Escape handling for the mobile sheet.
   useEffect(() => {

@@ -10,7 +10,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Lock, Radio } from "lucide-react";
 import type { ReactNode } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router";
+import { Navigate } from "react-router";
 
 /**
  * Wraps a route that requires a signed-in user.
@@ -30,10 +30,10 @@ export function RequireConsumer({
   title?: string;
   description?: string;
 }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  const location = useLocation();
+  const { isLoading, isAuthenticated } = useAuth();
 
   // Authentication first, then the consumer-role check.
+  const navigate = useNavigate();
   if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background">
@@ -67,8 +67,6 @@ export function RequireAuth({
 }) {
   const { isLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-
   // A local demo session is only a UI label (name, email, "simulation"
   // badge) — it is not an identity. Every case-scoped query is owner-checked
   // server-side, so rendering children before Convex Auth has resolved an

@@ -3,8 +3,7 @@ import { Link } from "react-router";
 
 // Pre-computed slider offsets used to position floating consumer controls
 // without overlapping the fixed header / sidebar.
-const LAUNCHER_BOTTOM_OFFSET = 180;
-import {
+const LAUNCHER_BOTTOM_OFFSET = 180;import {
   MessageSquare,
   Phone,
   Receipt,
@@ -17,6 +16,7 @@ import {
   Shield,
   Plus,
   Leaf,
+  User,
   AlertTriangle,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
