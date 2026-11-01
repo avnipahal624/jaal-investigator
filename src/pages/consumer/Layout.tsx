@@ -256,30 +256,30 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
           <div className="flex-1 overflow-y-auto p-4 xl:p-6">
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-3 xl:gap-4">
               {CATEGORIES.map((dest) => {
-      const Icon = dest.icon;
-      return (
-                <div
-                  key={dest.key}
-                  className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-card)] p-3 xl:p-4 cursor-pointer transition-all hover:bg-[var(--color-consumer-primary-soft)] hover:border-[var(--color-consumer-primary)]"
-                  onClick={() => {
-                    setDestinationsOpen(false);
-                    navigate(`/consumer/report?category=${dest.key}`);
-                  }}
-                >
-                  <div className="flex items-center gap-2.5 mb-2.5">
-                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-sm font-semibold">
-                      {dest.icon}
-                    </span>
-                    <span className="text-sm font-medium text-[var(--color-consumer-deep)]">
-                      {dest.label}
-                  </span>
-                </div>
-                <p className="text-xs text-[var(--color-consumer-muted)] leading-relaxed">
-                  {dest.description}
-                </p>
-              </div>
-            ))}
-          )}
+                const Icon = dest.icon;
+                return (
+                  <div
+                    key={dest.key}
+                    className="rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-card)] p-3 xl:p-4 cursor-pointer transition-all hover:bg-[var(--color-consumer-primary-soft)] hover:border-[var(--color-consumer-primary)]"
+                    onClick={() => {
+                      setDestinationsOpen(false);
+                      navigate(`/consumer/report?category=${dest.key}`);
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5 mb-2.5">
+                      <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-sm font-semibold">
+                        {Icon}
+                      </span>
+                      <span className="text-sm font-medium text-[var(--color-consumer-deep)]">
+                        {dest.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--color-consumer-muted)] leading-relaxed">
+                      {dest.description}
+                    </p>
+                  </div>
+                );
+              }))}
             </div>
           </div>
         )}
@@ -288,59 +288,6 @@ export default function ConsumerLayout({ children }: { children?: ReactNode }) {
   };
 
   const renderReportDialog = () => (
-    <dialog
-      ref={sheetRef}
-      className={`fixed inset-0 z-50 flex flex-col ${mobileOpen ? "flex" : "hidden"}`}
-      onPointerDown={(event) => {
-        if (event.target === event.currentTarget) {
-          setMobileOpen(false);
-        }
-      }}
-    >
-      <div className="flex flex-col border-b border-[var(--color-consumer-border)] px-4 xl:px-6 py-3 bg-[var(--color-consumer-card)]">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[var(--color-consumer-deep)]">
-            Report a Scam
-          </h2>
-          <button
-            type="button"
-            className="text-[var(--color-consumer-muted)] hover:text-[var(--color-consumer-text)] transition-colors"
-            onClick={() => setMobileOpen(false)}
-            aria-label="Close report dialog"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="mt-3 flex flex-col gap-2">
-          {CATEGORIES.map((category) => (
-            <button
-              key={category.key}
-              type="button"
-              className="w-full flex items-center gap-3 px-2.5 xl:px-3 py-2.5 xl:py-3 rounded-xl text-sm font-medium text-left transition-colors hover:bg-[var(--color-consumer-primary-soft)]"
-              onClick={() => {
-                setMobileOpen(false);
-                navigate(`/consumer/report?category=${category.key}`);
-              }}
-            >
-              <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--color-consumer-primary-soft)] text-[var(--color-consumer-primary)] text-xs font-semibold">
-                {category.icon}
-              </span>
-              <span className="text-sm font-medium text-[var(--color-consumer-deep)]">
-                {category.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-      {mobileOpen && (
-        <div className="flex-1 overflow-y-auto p-4 xl:p-6">            <ConsumerReportPage />
-
-        </div>
-      )}
-    </dialog>
-  );
-
-  return (
     <div className="min-h-screen bg-[var(--color-consumer-bg)] text-[var(--color-consumer-text)]">
       {/* Header — fixed, overlays the mobile sidebar when open */}
       <header className="fixed top-0 right-0 left-0 z-40 flex items-center gap-4 px-4 xl:px-8 h-[3.5rem] border-b border-[var(--color-consumer-border)] bg-[var(--color-consumer-card)]">
