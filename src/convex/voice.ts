@@ -107,22 +107,6 @@ async function loadOwnedRecording(
   return rec;
 }
 
-/**
- * Load a recording for an AUTHORISED INVESTIGATOR (cross-consumer intake
- * review). Access is granted only to real investigator/admin accounts; a
- * consumer can never read another user's recording through this path.
- */
-async function loadInvestigatorRecording(
-  ctx: QueryCtx | MutationCtx,
-  recordingId: Id<"voice_recordings">,
-): Promise<Doc<"voice_recordings">> {
-  const role = await roleOf(ctx);
-  if (role !== "investigator" && role !== "admin") {
-    throw new Error("Investigator access required to review this recording.");
-  }
-  return loadRecording(ctx, recordingId);
-}
-
 async function roleOf(
   ctx: QueryCtx | MutationCtx,
 ): Promise<Doc<"users">["role"] | null> {
@@ -625,13 +609,27 @@ export const getAudioUrl = query({
     asInvestigator: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const rec = args.asInvestigator
-      ? await loadInvestigatorRecording(ctx, args.recordingId)
-      : await loadOwnedRecording(ctx, args.recordingId);
+    if (args.asInvestigator) {
+      // Access-gated query: RETURN a structured "restricted" result instead of
+      // throwing. A thrown error inside a Convex query propagates into React and
+      // hard-crashes the page (useQuery never surfaces it as a catchable value),
+      // so the UI can render a clean access-denied state instead.
+      const role = await roleOf(ctx);
+      if (role !== "investigator" && role !== "admin") {
+        return { restricted: true as const, url: null, mimeType: null, fileName: null };
+      }
+      const rec = await ctx.db.get(args.recordingId);
+      if (!rec) {
+        return { restricted: false as const, url: null, mimeType: null, fileName: null };
+      }
+      const url = await ctx.storage.getUrl(rec.storageId);
+      return { restricted: false as const, url, mimeType: rec.mimeType, fileName: rec.fileName };
+    }
+    const rec = await loadOwnedRecording(ctx, args.recordingId);
     // Signed storage URL. Convex issues these with a server-managed expiry;
     // there is no permanent public link to any audio.
     const url = await ctx.storage.getUrl(rec.storageId);
-    return { url, mimeType: rec.mimeType, fileName: rec.fileName };
+    return { restricted: false as const, url, mimeType: rec.mimeType, fileName: rec.fileName };
   },
 });
 
