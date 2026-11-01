@@ -15,6 +15,7 @@ import {
   Link2,
   Mic,
   Fingerprint,
+  LogIn,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -55,22 +56,60 @@ function fmtTime(ms?: number): string {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// ---------------------------------------------------------------------------
-// Queue
-// ---------------------------------------------------------------------------
-
-export default function VoiceIntakePage() {
-  const { recordingId } = useParams<{ recordingId?: string }>();
-  if (recordingId) {
-    return <VoiceIntakeDetail recordingId={recordingId as Id<"voice_recordings">} />;
-  }
-  return <VoiceIntakeQueue />;
+// A string on a Convex query means the server rejected the caller with a
+// role/authentication restriction (requireRole throws). Surface that honestly
+// as a "requires investigator" state rather than a bare crash.
+function RestrictedState({
+  toAuth,
+  label,
+  sub,
+}: {
+  toAuth: string;
+  label: string;
+  sub: string;
+}) {
+  return (
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-2xl font-bold text-jtext flex items-center gap-2">
+          <Mic className="size-6 text-jcyan" />
+          Voice Intake
+        </h1>
+        <p className="mt-1 text-sm text-jmuted">{label}</p>
+      </header>
+      <div className="jaal-panel p-8 text-center">
+        <AlertTriangle className="size-8 text-jamber mx-auto" />
+        <p className="mt-3 text-sm text-jmuted">{sub}</p>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+          <Link
+            to={toAuth}
+            className="inline-flex items-center gap-2 rounded-xl border border-jborder bg-white px-4 py-2 text-sm font-medium text-jtext hover:bg-jsurface transition-colors"
+          >
+            <LogIn className="size-4" /> Sign in as investigator
+          </Link>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-sm font-medium text-jmuted hover:text-jtext"
+          >
+            Back to home
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 }
+
+// ---------------------------------------------------------------------------
+// Queue — lists consumer-submitted call recordings waiting for review.
+// Access is restricted to authorised investigator accounts.
+// ---------------------------------------------------------------------------
 
 function VoiceIntakeQueue() {
   const queue = useQuery(api.voice.intakeQueue);
   const loading = queue === undefined;
   const rows = queue ?? [];
+
+  const isRestricted = typeof queue === "string";
 
   return (
     <div className="space-y-6">
@@ -85,59 +124,69 @@ function VoiceIntakeQueue() {
         </p>
       </header>
 
-      {loading ? (
-        <div className="jaal-panel p-6 space-y-3" aria-busy="true">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-16 bg-jsurface rounded animate-pulse" />
-          ))}
-          <span className="sr-only">Loading voice intake…</span>
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="jaal-panel p-8 text-center">
-          <FileAudio className="size-8 text-jmuted mx-auto" />
-          <p className="mt-3 text-sm text-jmuted">
-            No voice recordings have been submitted yet.
-          </p>
-        </div>
+      {isRestricted ? (
+        <RestrictedState
+          toAuth="/auth"
+          label="This page is only available to authorised investigator accounts."
+          sub="If you are an investigator, sign in with the investigator account."
+        />
       ) : (
-        <div className="jaal-panel divide-y divide-jborder/60">
-          {rows.map((r) => (
-            <Link
-              key={r._id}
-              to={`/voice-intake/${r._id}`}
-              className="flex items-center justify-between gap-4 p-4 hover:bg-jsurface/60 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="font-mono text-sm text-jcyan">{r.caseId}</p>
-                <p className="mt-0.5 truncate text-xs text-jmuted">
-                  {r.fileName}
-                  {r.callerPhone ? ` · ${r.callerPhone}` : ""}
-                  {r.claimedIdentity ? ` · claimed: ${r.claimedIdentity}` : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                {r.assessment && (
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-jamber">
-                    {ASSESSMENT_LABEL[r.assessment]}
-                  </span>
-                )}
-                <span className="font-mono text-[10px] uppercase tracking-wider text-jmuted">
-                  {INTAKE_LABEL[r.intakeStatus] ?? r.intakeStatus}
-                </span>
-                <span className="font-mono text-[10px] text-jmuted/60">
-                  {new Date(r.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          {loading ? (
+            <div className="jaal-panel p-6 space-y-3" aria-busy="true">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-16 bg-jsurface rounded animate-pulse" />
+              ))}
+              <span className="sr-only">Loading voice intake…</span>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="jaal-panel p-8 text-center">
+              <FileAudio className="size-8 text-jmuted mx-auto" />
+              <p className="mt-3 text-sm text-jmuted">
+                No voice recordings have been submitted yet.
+              </p>
+            </div>
+          ) : (
+            <div className="jaal-panel divide-y divide-jborder/60">
+              {rows.map((r) => (
+                <Link
+                  key={r._id}
+                  to={`/voice-intake/${r._id}`}
+                  className="flex items-center justify-between gap-4 p-4 hover:bg-jsurface/60 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm text-jcyan">{r.caseId}</p>
+                    <p className="mt-0.5 truncate text-xs text-jmuted">
+                      {r.fileName}
+                      {r.callerPhone ? ` · ${r.callerPhone}` : ""}
+                      {r.claimedIdentity ? ` · claimed: ${r.claimedIdentity}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {r.assessment && (
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-jamber">
+                        {ASSESSMENT_LABEL[r.assessment]}
+                      </span>
+                    )}
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-jmuted">
+                      {INTAKE_LABEL[r.intakeStatus] ?? r.intakeStatus}
+                    </span>
+                    <span className="font-mono text-[10px] text-jmuted/60">
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Detail / review
+// Detail / review — investigator-facing review of a single voice recording.
 // ---------------------------------------------------------------------------
 
 function VoiceIntakeDetail({
@@ -146,15 +195,17 @@ function VoiceIntakeDetail({
   recordingId: Id<"voice_recordings">;
 }) {
   const detail = useQuery(api.voice.intakeDetail, { recordingId });
-  const audio = useQuery(api.voice.getAudioUrl, { recordingId, asInvestigator: true });
+  const audio = useQuery(
+    api.voice.getAudioUrl,
+    { recordingId, asInvestigator: true },
+  );
+
+  const isDetailRestricted = typeof detail === "string";
 
   const setIntakeStatus = useMutation(api.voice.setIntakeStatus);
   const reviewFinding = useMutation(api.voice.reviewFinding);
   const addInternalNote = useMutation(api.voice.addInternalNote);
-  const requestMoreInfo = useMutation(api.voice.requestMoreInfo);
-
   const [note, setNote] = useState("");
-  const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
 
   if (detail === undefined) {
@@ -165,6 +216,45 @@ function VoiceIntakeDetail({
       </div>
     );
   }
+
+  if (isDetailRestricted) {
+    return (
+      <div className="space-y-6">
+        <header className="border-b border-jborder/60 pb-3">
+          <h1 className="text-2xl font-bold text-jtext flex items-center gap-2">
+            <Mic className="size-6 text-jcyan" />
+            Voice Intake
+          </h1>
+          <p className="mt-1 text-sm text-jmuted">
+            Consumer-submitted call recordings waiting for review. Access is
+            restricted to authorised investigator accounts.
+          </p>
+        </header>
+        <div className="jaal-panel p-8 text-center">
+          <AlertTriangle className="size-8 text-jamber mx-auto" />
+          <p className="mt-3 text-sm text-jmuted">
+            This page is only available to authorised investigator accounts.
+            If you are an investigator, sign in with the investigator account.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              to="/auth"
+              className="inline-flex items-center gap-2 rounded-xl border border-jborder bg-white px-4 py-2 text-sm font-medium text-jtext hover:bg-jsurface transition-colors"
+            >
+              <LogIn className="size-4" /> Sign in as investigator
+            </Link>
+            <Link
+              to="/voice-intake"
+              className="inline-flex items-center gap-2 text-sm font-medium text-jmuted hover:text-jtext"
+            >
+              Back to intake
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (detail === null) {
     return (
       <div className="jaal-panel p-6 text-center">
@@ -172,7 +262,10 @@ function VoiceIntakeDetail({
         <p className="mt-2 text-sm text-jmuted">
           Recording not found, or investigator access is required.
         </p>
-        <Link to="/voice-intake" className="mt-3 inline-flex items-center gap-2 text-sm text-jcyan hover:underline">
+        <Link
+          to="/voice-intake"
+          className="mt-3 inline-flex items-center gap-2 text-sm text-jcyan hover:underline"
+        >
           <ArrowLeft className="size-4" /> Back to intake
         </Link>
       </div>
@@ -182,13 +275,7 @@ function VoiceIntakeDetail({
   const findings = (detail.analysis.findings as VoiceFinding[] | null) ?? [];
   const reviews = (detail.findingReviews as Record<string, { verdict: string }> | null) ?? {};
   const notes = (detail.internalNotes as { at: number; by: string; kind: string; text: string }[] | null) ?? [];
-  const infoRequests = (detail.infoRequests as { at: number; question: string; answered: boolean }[] | null) ?? [];
-
-  const setStatus = async (status: VoiceIntakeStatus) => {
-    // The status union is narrower than the mutation's accepted set (see the
-    // INTAKE_LABEL map). `setIntakeStatus` accepts: SUBMITTED, UNDER_REVIEW,
-    // MORE_INFORMATION_NEEDED, ACCEPTED, CLOSED. Validate against the
-    // permitted values to keep the call honest.
+   const setStatus = async (status: VoiceIntakeStatus) => {
     const perm: Array<"SUBMITTED" | "UNDER_REVIEW" | "MORE_INFORMATION_NEEDED" | "ACCEPTED" | "CLOSED"> = [
       "SUBMITTED",
       "UNDER_REVIEW",
@@ -472,41 +559,6 @@ function VoiceIntakeDetail({
           </section>
 
           <section className="jaal-panel p-4">
-            <h2 className="jaal-label mb-3">Request more information</h2>
-            <textarea
-              rows={2}
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask the reporter for more detail…"
-              className="w-full bg-jsurface border border-jborder px-3 py-2 text-sm text-jtext"
-            />
-            <button
-              type="button"
-              disabled={busy || !question.trim()}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  await requestMoreInfo({ recordingId, question: question.trim() });
-                  setQuestion("");
-                } finally {
-                  setBusy(false);
-                }
-              }}
-              className="mt-2 border border-jborder px-3 py-1.5 text-xs text-jtext hover:bg-jsurface"
-            >
-              Send request
-            </button>
-            <ul className="mt-3 space-y-2">
-              {infoRequests.map((r, i) => (
-                <li key={i} className="text-[11px] text-jmuted border-l-2 border-jborder pl-2">
-                  <p className="text-jtext">{r.question}</p>
-                  <span className="font-mono">{r.answered ? "answered" : "awaiting reply"}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3 flex items-center gap-2">
               <Link2 className="size-3.5" /> Link to case
             </h2>
@@ -541,4 +593,12 @@ function Row({ label, value }: { label: string; value: string }) {
       <dd className="text-jtext text-right min-w-0 break-words">{value}</dd>
     </div>
   );
+}
+
+export default function VoiceIntakePage() {
+  const { recordingId } = useParams<{ recordingId?: string }>();
+  if (recordingId) {
+    return <VoiceIntakeDetail recordingId={recordingId as Id<"voice_recordings">} />;
+  }
+  return <VoiceIntakeQueue />;
 }
