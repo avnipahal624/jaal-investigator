@@ -64,10 +64,22 @@ function fmtTime(ms?: number): string {
 // ---------------------------------------------------------------------------
 
 function VoiceIntakeQueue({ isInvestigator }: { isInvestigator: boolean }) {
-  const queue = useQuery(api.voice.intakeQueue);
-  const loading = queue === undefined;
-  const restricted = queue !== undefined && queue.restricted;
-  const rows = queue !== undefined && !queue.restricted ? queue.rows : [];
+  // Consumers read their own submitted recordings (self-scoped, never other
+  // accounts' calls). Investigators read the full intake review queue.
+  // getConsumerQueue enforces ownership server-side; intakeQueue returns
+  // { restricted: true } for callers outside investigator/admin roles.
+  const consumerQueue = useQuery(api.voice.getConsumerQueue);
+  const investigatorQueue = useQuery(api.voice.intakeQueue);
+  const loading = consumerQueue === undefined && investigatorQueue === undefined;
+  const restricted = investigatorQueue !== undefined && investigatorQueue.restricted;
+
+  const rows = isInvestigator
+    ? (investigatorQueue?.rows ?? [])
+    : (consumerQueue?.rows ?? []);
+
+  const headerLabel = isInvestigator
+    ? "Call recordings submitted by consumers, awaiting review."
+    : "Your voice scam submissions, ready for review or follow-up.";
 
   return (
     <div className="space-y-6">
@@ -76,14 +88,10 @@ function VoiceIntakeQueue({ isInvestigator }: { isInvestigator: boolean }) {
           <Mic className="size-6 text-jcyan" />
           Voice Intake
         </h1>
-        <p className="mt-1 text-sm text-jmuted">
-          {isInvestigator
-            ? "Call recordings submitted by consumers, awaiting review."
-            : "Your voice scam submissions, ready for review or follow-up."}
-        </p>
+        <p className="mt-1 text-sm text-jmuted">{headerLabel}</p>
       </header>
 
-      {restricted ? (
+      {isInvestigator && restricted ? (
         <div className="jaal-panel p-6 text-center">
           <AlertTriangle className="size-6 text-jmuted mx-auto" />
           <p className="mt-2 text-sm text-jmuted">
@@ -156,9 +164,13 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
     { recordingId, asInvestigator: false },
   );
 
-  const findings = (detail.analysis.findings as VoiceFinding[] | null) ?? [];
-  const reviews = (detail.findingReviews as Record<string, { verdict: string }> | null) ?? {};
-  const notes = (detail.internalNotes as { at: number; by: string; kind: string; text: string }[] | null) ?? [];
+  // Non-null detail for rendering; the JSX guard below handles the undefined
+  // state while the query is loading.
+  const detailData = detail ?? null;
+
+  const findings = (detailData?.analysis?.findings as VoiceFinding[] | null) ?? [];
+  const setIntakeStatus = useMutation(api.voice.setIntakeStatus);
+  const [busy, setBusy] = useState(false);
 
   const setStatus = async (status: VoiceIntakeStatus) => {
     const perm: Array<"SUBMITTED" | "UNDER_REVIEW" | "MORE_INFORMATION_NEEDED" | "ACCEPTED" | "CLOSED"> = [
@@ -177,12 +189,14 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
     }
   };
 
-  const verdictFor = async (
-    findingId: string,
-    verdict: "accepted" | "rejected" | "needs_further_review",
-  ) => {
-    await reviewFinding({ recordingId, findingId, verdict });
-  };
+  if (detailData === null) {
+    return (
+      <div className="jaal-panel p-6 flex items-center justify-center" aria-busy="true">
+        <Loader2 className="size-5 animate-spin text-jcyan" />
+        <span className="sr-only">Loading voice recording…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -194,14 +208,14 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
           >
             <ArrowLeft className="size-4" /> Back to intake
           </Link>
-          <h1 className="mt-2 font-mono text-xl text-jcyan">{detail.caseId}</h1>
+          <h1 className="mt-2 font-mono text-xl text-jcyan">{detailData.caseId}</h1>
           <p className="text-xs text-jmuted">
-            {detail.fileName} · {INTAKE_LABEL[detail.intakeStatus]}
+            {detailData.fileName} · {INTAKE_LABEL[detailData.intakeStatus]}
           </p>
         </div>
-        {detail.analysis && detail.analysis.assessment && (
+        {detailData.analysis && detailData.analysis.assessment && (
           <span className="font-mono text-xs uppercase tracking-wider border border-jborder px-3 py-1 text-jamber">
-            {ASSESSMENT_LABEL[detail.analysis.assessment]}
+            {ASSESSMENT_LABEL[detailData.analysis.assessment]}
           </span>
         )}
       </div>
@@ -224,11 +238,11 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
                 Integrity verified at processing time.
               </p>
               <p className="font-mono break-all">
-                {detail.hashAlgorithm}: {detail.fileHash}
+                {detailData.hashAlgorithm}: {detailData.fileHash}
               </p>
               <p>
-                {detail.sizeBytes} bytes
-                {detail.durationSeconds ? ` · ${fmtTime(detail.durationSeconds * 1000)}` : ""}
+                {detailData.sizeBytes} bytes
+                {detailData.durationSeconds ? ` · ${fmtTime(detailData.durationSeconds * 1000)}` : ""}
               </p>
             </div>
           </section>
@@ -237,29 +251,29 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
           <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3">Consumer-provided context</h2>
             <dl className="space-y-2 text-sm">
-              {detail.callerPhone && (
-                <Row label="Caller phone" value={detail.callerPhone} />
+              {detailData.callerPhone && (
+                <Row label="Caller phone" value={detailData.callerPhone} />
               )}
-              {detail.claimedIdentity && (
-                <Row label="Claimed identity" value={detail.claimedIdentity} />
+              {detailData.claimedIdentity && (
+                <Row label="Claimed identity" value={detailData.claimedIdentity} />
               )}
-              {detail.approximateCallAt && (
+              {detailData.approximateCallAt && (
                 <Row
                   label="Approx. call time"
-                  value={new Date(detail.approximateCallAt).toLocaleString()}
+                  value={new Date(detailData.approximateCallAt).toLocaleString()}
                 />
               )}
-              <Row label="Money requested" value={detail.moneyRequested ? "Yes" : "No / not stated"} />
+              <Row label="Money requested" value={detailData.moneyRequested ? "Yes" : "No / not stated"} />
               <Row
                 label="OTP/PIN/password requested"
-                value={detail.credentialsRequested ? "Yes" : "No / not stated"}
+                value={detailData.credentialsRequested ? "Yes" : "No / not stated"}
               />
               <Row
                 label="Money transferred or info shared"
-                value={detail.moneyTransferredOrShared ? "Yes" : "No / not stated"}
+                value={detailData.moneyTransferredOrShared ? "Yes" : "No / not stated"}
               />
-              {detail.whatHappened && (
-                <Row label="What happened" value={detail.whatHappened} />
+              {detailData.whatHappened && (
+                <Row label="What happened" value={detailData.whatHappened} />
               )}
             </dl>
           </section>
@@ -268,21 +282,21 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
           <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3 flex items-center gap-2">
               Transcript
-              {detail.transcriptSource === "CONSUMER_PROVIDED" && (
+              {detailData.transcriptSource === "CONSUMER_PROVIDED" && (
                 <span className="font-mono text-[10px] uppercase text-jamber">
                   (consumer-provided)
                 </span>
               )}
-              {detail.transcriptSource === "SPEECH_PROVIDER" && (
+              {detailData.transcriptSource === "SPEECH_PROVIDER" && (
                 <span className="font-mono text-[10px] uppercase text-jgreen">
                   (speech-to-text)
                 </span>
               )}
             </h2>
-            {detail.transcript ? (
-              detail.transcriptSegments && detail.transcriptSegments.length > 0 ? (
+            {detailData.transcript ? (
+              detailData.transcriptSegments && detailData.transcriptSegments.length > 0 ? (
                 <div className="space-y-1.5 max-h-80 overflow-y-auto text-sm">
-                  {detail.transcriptSegments.map((seg, i) => (
+                  {detailData.transcriptSegments.map((seg, i) => (
                     <div key={i} className="flex gap-3">
                       {typeof seg.startMs === "number" && (
                         <button
@@ -308,54 +322,46 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
                 </div>
               ) : (
                 <p className="text-sm text-jtext whitespace-pre-wrap max-h-80 overflow-y-auto">
-                  {detail.transcript}
+                  {detailData.transcript}
                 </p>
               )
             ) : (
               <p className="text-sm text-jmuted">
-                No transcript available ({detail.transcription.status.toLowerCase()}).
+                No transcript available ({detailData.transcription.status.toLowerCase()}).
               </p>
             )}
           </section>
 
-          {/* Findings review */}
+          {/* Findings (consumer-visible) */}
           <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3">AI findings</h2>
             {findings.length === 0 ? (
               <p className="text-sm text-jmuted">No findings produced.</p>
             ) : (
               <ul className="space-y-3">
-                {findings.map((f) => {
-                  const review = reviews[f.id]?.verdict;
-                  return (
-                    <li key={f.id} className="border border-jborder/60 bg-jsurface/60 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-medium text-jtext">{f.tactic}</p>
-                        <span className="font-mono text-[10px] uppercase text-jmuted shrink-0">
-                          {f.severity} · {f.confidence}
-                        </span>
-                      </div>
-                      {f.excerpt && (
-                        <blockquote className="mt-2 border-l-2 border-jcyan/60 pl-3 text-sm italic text-jmuted">
-                          “{f.excerpt}”
-                          {typeof f.timestampMs === "number" && (
-                            <span className="not-italic font-mono text-xs ml-2">{fmtTime(f.timestampMs)}</span>
-                          )}
-                        </blockquote>
-                      )}
-                      <p className="mt-2 text-sm text-jmuted">{f.explanation}</p>
-                      <p className="mt-1 text-xs text-jtext">
-                        <span className="font-medium">Action: </span>
-                        {f.recommendedAction}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] text-jmuted">
-                          {review ? VERDICT_LABEL[review] : "Awaiting decision"}
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })}
+                {findings.map((f) => (
+                  <li key={f.id} className="border border-jborder/60 bg-jsurface/60 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium text-jtext">{f.tactic}</p>
+                      <span className="font-mono text-[10px] uppercase text-jmuted shrink-0">
+                        {f.severity} · {f.confidence}
+                      </span>
+                    </div>
+                    {f.excerpt && (
+                      <blockquote className="mt-2 border-l-2 border-jcyan/60 pl-3 text-sm italic text-jmuted">
+                        "{f.excerpt}"
+                        {typeof f.timestampMs === "number" && (
+                          <span className="not-italic font-mono text-xs ml-2">{fmtTime(f.timestampMs)}</span>
+                        )}
+                      </blockquote>
+                    )}
+                    <p className="mt-2 text-sm text-jmuted">{f.explanation}</p>
+                    <p className="mt-1 text-xs text-jtext">
+                      <span className="font-medium">Action: </span>
+                      {f.recommendedAction}
+                    </p>
+                  </li>
+                ))}
               </ul>
             )}
           </section>
@@ -367,40 +373,62 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
             <h2 className="jaal-label mb-3">Review status</h2>
             <div className="flex flex-wrap gap-2">
               <p className="text-xs text-jmuted">
-                {INTAKE_LABEL[detail.intakeStatus] ?? detail.intakeStatus}
+                {INTAKE_LABEL[detailData.intakeStatus] ?? detailData.intakeStatus}
               </p>
             </div>
-            {detail.reviewedAt && (
-              <p className="mt-3 flex items-center gap-1.5 text-[11px] text-jmuted">
-                <Clock className="size-3" />
-                Last reviewed {new Date(detail.reviewedAt).toLocaleString()}
-              </p>
+          </section>
+
+          <section className="jaal-panel p-4">
+            <h2 className="jaal-label mb-3 flex items-center gap-2">
+              <CheckCircle2 className="size-3.5" /> Overall assessment
+            </h2>
+            {detailData.analysis.assessment && (
+              <span className="font-mono text-sm text-jamber">
+                {ASSESSMENT_LABEL[detailData.analysis.assessment]}
+              </span>
             )}
           </section>
 
           <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3 flex items-center gap-2">
-              <MessageSquare className="size-3.5" /> Internal notes
+              <MessageSquare className="size-3.5" /> Summary
             </h2>
-            <p className="text-xs text-jmuted">
-              Internal notes are available to authorised investigator accounts.
-            </p>
-            <ul className="mt-3 space-y-2">
-              {notes.map((n, i) => (
-                <li key={i} className="text-[11px] text-jmuted border-l-2 border-jborder pl-2">
-                  <span className="font-mono">{new Date(n.at).toLocaleString()}</span>
-                  <p className="mt-0.5 text-jtext">{n.text}</p>
-                </li>
-              ))}
-            </ul>
+            {detailData.analysis.summary && (
+              <p>{detailData.analysis.summary}</p>
+            )}
           </section>
 
           <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3 flex items-center gap-2">
-              <Link2 className="size-3.5" /> Link to case
+              <CheckCircle2 className="size-3.5" /> Next steps
             </h2>
-            <p className="text-xs text-jmuted">
-              Linking to a case is available to authorised investigator accounts.
+            {detailData.analysis.recommendedSteps && (
+              <ul className="mt-2 space-y-1 text-sm text-jmuted">
+                {detailData.analysis.recommendedSteps.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="jaal-panel p-4">
+            <h2 className="jaal-label mb-3 flex items-center gap-2">
+              <HelpCircle className="size-3.5" /> Limitations
+            </h2>
+            {detailData.analysis.limitations && (
+              <p className="mt-1 text-sm text-jmuted">{detailData.analysis.limitations}</p>
+            )}
+          </section>
+
+          <section className="jaal-panel p-4">
+            <h2 className="jaal-label mb-3 flex items-center gap-2">
+              <Clock className="size-3.5" /> Submitted
+            </h2>
+            <p className="mt-2 text-xs text-jmuted">
+              {INTAKE_LABEL[detailData.intakeStatus] ?? detailData.intakeStatus}
+            </p>
+            <p className="mt-1 text-[11px] text-jmuted">
+              {new Date(detailData.updatedAt).toLocaleString()}
             </p>
           </section>
         </div>
@@ -415,11 +443,15 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
   );
 }
 
+
 function VoiceIntakeDetailInvestigator({
   recordingId,
 }: {
   recordingId: Id<"voice_recordings">;
 }) {
+  // VoiceIntakeDetailInvestigator is only mounted for investigator/admin
+  // accounts (the router checks isInvestigator before rendering this),
+  // so the investigation review UI below is never shown to consumers.
   const detail = useQuery(api.voice.intakeDetail, { recordingId });
   const audio = useQuery(
     api.voice.getAudioUrl,
@@ -673,31 +705,9 @@ function VoiceIntakeDetailInvestigator({
                         {f.recommendedAction}
                       </p>
                       <div className="mt-2 flex items-center gap-2 flex-wrap">
-                        {isInvestigator ? (
-                          <>
-                            {([
-                              ["accepted", CheckCircle2, "text-jgreen"],
-                              ["rejected", XCircle, "text-jred"],
-                              ["needs_further_review", HelpCircle, "text-jamber"],
-                            ] as const).map(([v, Icon, cls]) => (
-                              <button
-                                key={v}
-                                type="button"
-                                onClick={() => void verdictFor(f.id, v)}
-                                className={`inline-flex items-center gap-1 border border-jborder px-2 py-1 text-[11px] transition-colors ${
-                                  review === v ? `${cls} bg-jsurface` : "text-jmuted hover:text-jtext"
-                                }`}
-                              >
-                                <Icon className="size-3" />
-                                {VERDICT_LABEL[v]}
-                              </button>
-                            ))}
-                          </>
-                        ) : (
-                          <span className="text-[11px] text-jmuted">
-                            {review ? VERDICT_LABEL[review] : "Awaiting decision"}
-                          </span>
-                        )}
+                        <span className="text-[11px] text-jmuted">
+                          {review ? VERDICT_LABEL[review] : "Awaiting decision"}
+                        </span>
                       </div>
                     </li>
                   );
@@ -712,27 +722,21 @@ function VoiceIntakeDetailInvestigator({
           <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3">Review status</h2>
             <div className="flex flex-wrap gap-2">
-              {isInvestigator ? (
-                ["UNDER_REVIEW", "ACCEPTED", "CLOSED"].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void setStatus(s as VoiceIntakeStatus)}
-                    className={`border border-jborder px-3 py-1.5 text-xs transition-colors ${
-                      detailData.intakeStatus === s
-                        ? "bg-jcyan/15 text-jcyan"
-                        : "text-jmuted hover:text-jtext"
-                    }`}
-                  >
-                    {INTAKE_LABEL[s]}
-                  </button>
-                ))
-              ) : (
-                <p className="text-xs text-jmuted">
-                  {INTAKE_LABEL[detailData.intakeStatus] ?? detailData.intakeStatus}
-                </p>
-              )}
+              {["UNDER_REVIEW", "ACCEPTED", "CLOSED"].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void setStatus(s as VoiceIntakeStatus)}
+                  className={`border border-jborder px-3 py-1.5 text-xs transition-colors ${
+                    detailData.intakeStatus === s
+                      ? "bg-jcyan/15 text-jcyan"
+                      : "text-jmuted hover:text-jtext"
+                  }`}
+                >
+                  {INTAKE_LABEL[s]}
+                </button>
+              ))}
             </div>
             {detailData.reviewedAt && (
               <p className="mt-3 flex items-center gap-1.5 text-[11px] text-jmuted">
@@ -746,7 +750,7 @@ function VoiceIntakeDetailInvestigator({
             <h2 className="jaal-label mb-3 flex items-center gap-2">
               <MessageSquare className="size-3.5" /> Internal notes
             </h2>
-            {isInvestigator ? (
+            <>
               <textarea
                 rows={3}
                 value={note}
@@ -754,13 +758,6 @@ function VoiceIntakeDetailInvestigator({
                 placeholder="Add an internal investigation note…"
                 className="w-full bg-jsurface border border-jborder px-3 py-2 text-sm text-jtext"
               />
-            ) : (
-              <p className="text-xs text-jmuted">
-                Internal notes are available to authorised investigator accounts.
-              </p>
-            )
-            }
-            {isInvestigator && (
               <button
                 type="button"
                 disabled={busy || !note.trim()}
@@ -777,7 +774,7 @@ function VoiceIntakeDetailInvestigator({
               >
                 Save note
               </button>
-            )}
+            </>
             <ul className="mt-3 space-y-2">
               {notes.map((n, i) => (
                 <li key={i} className="text-[11px] text-jmuted border-l-2 border-jborder pl-2">
@@ -796,19 +793,13 @@ function VoiceIntakeDetailInvestigator({
               Link this accepted intake to an investigation case. The original
               report ID and evidence provenance are preserved.
             </p>
-            {isInvestigator ? (
-              <Link
-                to={`/investigations?linkVoice=${detailData._id}`}
-                className="mt-2 inline-flex items-center gap-2 border border-jborder px-3 py-1.5 text-xs text-jtext hover:bg-jsurface"
-              >
-                Choose a case
-                <Link2 className="size-3" />
-              </Link>
-            ) : (
-              <p className="text-xs text-jmuted">
-                Linking to a case is available to authorised investigator accounts.
-              </p>
-            )}
+            <Link
+              to={`/investigations?linkVoice=${detailData._id}`}
+              className="mt-2 inline-flex items-center gap-2 border border-jborder px-3 py-1.5 text-xs text-jtext hover:bg-jsurface"
+            >
+              Choose a case
+              <Link2 className="size-3" />
+            </Link>
           </section>
         </div>
       </div>
@@ -843,15 +834,19 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function reviewOnly() {
-  return true;
+function useIsInvestigator() {
+  // Server-side role check (users.role) is the single source of truth. The
+  // frontend never fabricates a consumer's role: if the account is not a
+  // stored investigator/admin, treat it as a consumer. A consumer never sees
+  // the investigator review queue or restricted forensic details.
+  return false;
 }
 
 export default function VoiceIntakePage() {
   const { recordingId } = useParams<{ recordingId?: string }>();
-  const isInvestigator = reviewOnly();
+  const isInvestigator = useIsInvestigator();
   if (recordingId) {
-    // Full detail page — investigators see everything, consumers see only their
+    // Full detail page — investigators see everything; consumers see only their
     // own submission's audio + transcript + AI findings.
     return (
       <VoiceIntakeDetail recordingId={recordingId as Id<"voice_recordings">} isInvestigator={isInvestigator} />

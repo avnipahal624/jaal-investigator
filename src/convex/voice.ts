@@ -599,6 +599,39 @@ export const getVoiceRecording = query({
 });
 
 /**
+ * Self-only list of this account's submitted voice intake recordings, newest
+ * first. For consumers — never exposes other accounts' recordings.
+ */
+export const getConsumerQueue = query({
+  args: {},
+  handler: async (ctx) => {
+    const owner = await getOwner(ctx);
+    const rows = await ctx.db
+      .query("voice_recordings")
+      .withIndex("by_owner", (q) => q.eq("owner", owner))
+      .collect();
+    const sorted = [...rows].sort((a, b) => b.createdAt - a.createdAt);
+    return {
+      restricted: false as const,
+      rows: sorted.map((r) => ({
+        _id: r._id as string,
+        caseId: r.caseId,
+        fileName: r.fileName,
+        sizeBytes: r.sizeBytes,
+        durationSeconds: r.durationSeconds ?? null,
+        callerPhone: r.callerPhone ?? null,
+        claimedIdentity: r.claimedIdentity ?? null,
+        intakeStatus: r.intakeStatus,
+        assessment: r.analysis.assessment ?? null,
+        analysisStatus: r.analysis.status,
+        transcriptionStatus: r.transcription.status,
+        createdAt: r.createdAt,
+      })),
+    };
+  },
+});
+
+/**
  * Temporary signed playback URL for a recording the caller owns. The URL
  * expires quickly; there is no permanent public link to any audio.
  */
