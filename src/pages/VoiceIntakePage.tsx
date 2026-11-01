@@ -107,9 +107,8 @@ function RestrictedState({
 function VoiceIntakeQueue() {
   const queue = useQuery(api.voice.intakeQueue);
   const loading = queue === undefined;
-  const rows = queue ?? [];
-
-  const isRestricted = typeof queue === "string";
+  const restricted = queue !== undefined && queue.restricted;
+  const rows = queue !== undefined && !queue.restricted ? queue.rows : [];
 
   return (
     <div className="space-y-6">
@@ -124,7 +123,7 @@ function VoiceIntakeQueue() {
         </p>
       </header>
 
-      {isRestricted ? (
+      {restricted ? (
         <RestrictedState
           toAuth="/auth"
           label="This page is only available to authorised investigator accounts."
@@ -200,7 +199,8 @@ function VoiceIntakeDetail({
     { recordingId, asInvestigator: true },
   );
 
-  const isDetailRestricted = typeof detail === "string";
+  const isDetailRestricted = detail !== undefined && detail.restricted;
+  const detailData = detail?.restricted === false ? detail.recording : null;
 
   const setIntakeStatus = useMutation(api.voice.setIntakeStatus);
   const reviewFinding = useMutation(api.voice.reviewFinding);
@@ -255,12 +255,12 @@ function VoiceIntakeDetail({
     );
   }
 
-  if (detail === null) {
+  if (!detailData) {
     return (
       <div className="jaal-panel p-6 text-center">
         <AlertTriangle className="size-6 text-jmuted mx-auto" />
         <p className="mt-2 text-sm text-jmuted">
-          Recording not found, or investigator access is required.
+          Recording not found.
         </p>
         <Link
           to="/voice-intake"
@@ -270,12 +270,11 @@ function VoiceIntakeDetail({
         </Link>
       </div>
     );
-  }
+  }  const findings = (detailData.analysis.findings as VoiceFinding[] | null) ?? [];
+  const reviews = (detailData.findingReviews as Record<string, { verdict: string }> | null) ?? {};
+  const notes = (detailData.internalNotes as { at: number; by: string; kind: string; text: string }[] | null) ?? [];
 
-  const findings = (detail.analysis.findings as VoiceFinding[] | null) ?? [];
-  const reviews = (detail.findingReviews as Record<string, { verdict: string }> | null) ?? {};
-  const notes = (detail.internalNotes as { at: number; by: string; kind: string; text: string }[] | null) ?? [];
-   const setStatus = async (status: VoiceIntakeStatus) => {
+  const setStatus = async (status: VoiceIntakeStatus) => {
     const perm: Array<"SUBMITTED" | "UNDER_REVIEW" | "MORE_INFORMATION_NEEDED" | "ACCEPTED" | "CLOSED"> = [
       "SUBMITTED",
       "UNDER_REVIEW",
@@ -308,15 +307,14 @@ function VoiceIntakeDetail({
             className="inline-flex items-center gap-2 text-sm text-jmuted hover:text-jtext"
           >
             <ArrowLeft className="size-4" /> Back to intake
-          </Link>
-          <h1 className="mt-2 font-mono text-xl text-jcyan">{detail.caseId}</h1>
+          </Link>            <h1 className="mt-2 font-mono text-xl text-jcyan">{detailData.caseId}</h1>
           <p className="text-xs text-jmuted">
-            {detail.fileName} · {INTAKE_LABEL[detail.intakeStatus]}
+            {detailData.fileName} · {INTAKE_LABEL[detailData.intakeStatus]}
           </p>
         </div>
-        {detail.analysis.assessment && (
+        {detailData.analysis && detailData.analysis.assessment && (
           <span className="font-mono text-xs uppercase tracking-wider border border-jborder px-3 py-1 text-jamber">
-            {ASSESSMENT_LABEL[detail.analysis.assessment]}
+            {ASSESSMENT_LABEL[detailData.analysis.assessment]}
           </span>
         )}
       </div>
@@ -339,11 +337,11 @@ function VoiceIntakeDetail({
                 Integrity verified at processing time.
               </p>
               <p className="font-mono break-all">
-                {detail.hashAlgorithm}: {detail.fileHash}
+                {detailData.hashAlgorithm}: {detailData.fileHash}
               </p>
               <p>
-                {detail.sizeBytes} bytes
-                {detail.durationSeconds ? ` · ${fmtTime(detail.durationSeconds * 1000)}` : ""}
+                {detailData.sizeBytes} bytes
+                {detailData.durationSeconds ? ` · ${fmtTime(detailData.durationSeconds * 1000)}` : ""}
               </p>
             </div>
           </section>
@@ -352,29 +350,29 @@ function VoiceIntakeDetail({
           <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3">Consumer-provided context</h2>
             <dl className="space-y-2 text-sm">
-              {detail.callerPhone && (
-                <Row label="Caller phone" value={detail.callerPhone} />
+              {detailData.callerPhone && (
+                <Row label="Caller phone" value={detailData.callerPhone} />
               )}
-              {detail.claimedIdentity && (
-                <Row label="Claimed identity" value={detail.claimedIdentity} />
+              {detailData.claimedIdentity && (
+                <Row label="Claimed identity" value={detailData.claimedIdentity} />
               )}
-              {detail.approximateCallAt && (
+              {detailData.approximateCallAt && (
                 <Row
                   label="Approx. call time"
-                  value={new Date(detail.approximateCallAt).toLocaleString()}
+                  value={new Date(detailData.approximateCallAt).toLocaleString()}
                 />
               )}
-              <Row label="Money requested" value={detail.moneyRequested ? "Yes" : "No / not stated"} />
+              <Row label="Money requested" value={detailData.moneyRequested ? "Yes" : "No / not stated"} />
               <Row
                 label="OTP/PIN/password requested"
-                value={detail.credentialsRequested ? "Yes" : "No / not stated"}
+                value={detailData.credentialsRequested ? "Yes" : "No / not stated"}
               />
               <Row
                 label="Money transferred or info shared"
-                value={detail.moneyTransferredOrShared ? "Yes" : "No / not stated"}
+                value={detailData.moneyTransferredOrShared ? "Yes" : "No / not stated"}
               />
-              {detail.whatHappened && (
-                <Row label="What happened" value={detail.whatHappened} />
+              {detailData.whatHappened && (
+                <Row label="What happened" value={detailData.whatHappened} />
               )}
             </dl>
           </section>
@@ -383,21 +381,20 @@ function VoiceIntakeDetail({
           <section className="jaal-panel p-4">
             <h2 className="jaal-label mb-3 flex items-center gap-2">
               Transcript
-              {detail.transcriptSource === "CONSUMER_PROVIDED" && (
+          {detailData.transcriptSource === "CONSUMER_PROVIDED" && (
                 <span className="font-mono text-[10px] uppercase text-jamber">
                   (consumer-provided)
                 </span>
               )}
-              {detail.transcriptSource === "SPEECH_PROVIDER" && (
+          {detailData.transcriptSource === "SPEECH_PROVIDER" && (
                 <span className="font-mono text-[10px] uppercase text-jgreen">
                   (speech-to-text)
                 </span>
               )}
-            </h2>
-            {detail.transcript ? (
-              detail.transcriptSegments && detail.transcriptSegments.length > 0 ? (
+            </h2>              {detailData.transcript ? (
+              detailData.transcriptSegments && detailData.transcriptSegments.length > 0 ? (
                 <div className="space-y-1.5 max-h-80 overflow-y-auto text-sm">
-                  {detail.transcriptSegments.map((seg, i) => (
+                  {detailData.transcriptSegments.map((seg, i) => (
                     <div key={i} className="flex gap-3">
                       {typeof seg.startMs === "number" && (
                         <button
@@ -423,12 +420,12 @@ function VoiceIntakeDetail({
                 </div>
               ) : (
                 <p className="text-sm text-jtext whitespace-pre-wrap max-h-80 overflow-y-auto">
-                  {detail.transcript}
+                  {detailData.transcript}
                 </p>
               )
             ) : (
               <p className="text-sm text-jmuted">
-                No transcript available ({detail.transcription.status.toLowerCase()}).
+                No transcript available ({detailData.transcription.status.toLowerCase()}).
               </p>
             )}
           </section>
@@ -504,7 +501,7 @@ function VoiceIntakeDetail({
                   disabled={busy}
                   onClick={() => void setStatus(s)}
                   className={`border border-jborder px-3 py-1.5 text-xs transition-colors ${
-                    detail.intakeStatus === s
+                    detailData.intakeStatus === s
                       ? "bg-jcyan/15 text-jcyan"
                       : "text-jmuted hover:text-jtext"
                   }`}
@@ -513,10 +510,10 @@ function VoiceIntakeDetail({
                 </button>
               ))}
             </div>
-            {detail.reviewedAt && (
+            {detailData.reviewedAt && (
               <p className="mt-3 flex items-center gap-1.5 text-[11px] text-jmuted">
                 <Clock className="size-3" />
-                Last reviewed {new Date(detail.reviewedAt).toLocaleString()}
+                Last reviewed {new Date(detailData.reviewedAt).toLocaleString()}
               </p>
             )}
           </section>
@@ -567,7 +564,7 @@ function VoiceIntakeDetail({
               report ID and evidence provenance are preserved.
             </p>
             <Link
-              to={`/investigations?linkVoice=${detail._id}`}
+              to={`/investigations?linkVoice=${detailData._id}`}
               className="mt-2 inline-flex items-center gap-2 border border-jborder px-3 py-1.5 text-xs text-jtext hover:bg-jsurface"
             >
               Choose a case

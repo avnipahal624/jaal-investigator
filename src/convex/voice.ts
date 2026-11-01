@@ -645,23 +645,33 @@ export const getAudioUrl = query({
 export const intakeQueue = query({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["investigator"]);
+    // Access-gated query: RETURN a structured "restricted" result instead of
+    // throwing. A thrown error inside a Convex query propagates into React and
+    // hard-crashes the page (useQuery never surfaces it as a catchable value),
+    // so the UI can render a clean access-denied state instead.
+    const role = await roleOf(ctx);
+    if (role !== "investigator" && role !== "admin") {
+      return { restricted: true as const };
+    }
     const rows = await ctx.db.query("voice_recordings").collect();
     const sorted = [...rows].sort((a, b) => b.createdAt - a.createdAt);
-    return sorted.map((r) => ({
-      _id: r._id as string,
-      caseId: r.caseId,
-      fileName: r.fileName,
-      sizeBytes: r.sizeBytes,
-      durationSeconds: r.durationSeconds ?? null,
-      callerPhone: r.callerPhone ?? null,
-      claimedIdentity: r.claimedIdentity ?? null,
-      intakeStatus: r.intakeStatus,
-      assessment: r.analysis.assessment ?? null,
-      analysisStatus: r.analysis.status,
-      transcriptionStatus: r.transcription.status,
-      createdAt: r.createdAt,
-    }));
+    return {
+      restricted: false as const,
+      rows: sorted.map((r) => ({
+        _id: r._id as string,
+        caseId: r.caseId,
+        fileName: r.fileName,
+        sizeBytes: r.sizeBytes,
+        durationSeconds: r.durationSeconds ?? null,
+        callerPhone: r.callerPhone ?? null,
+        claimedIdentity: r.claimedIdentity ?? null,
+        intakeStatus: r.intakeStatus,
+        assessment: r.analysis.assessment ?? null,
+        analysisStatus: r.analysis.status,
+        transcriptionStatus: r.transcription.status,
+        createdAt: r.createdAt,
+      })),
+    };
   },
 });
 
@@ -669,8 +679,18 @@ export const intakeQueue = query({
 export const intakeDetail = query({
   args: { recordingId: v.id("voice_recordings") },
   handler: async (ctx, args) => {
-    const rec = await loadInvestigatorRecording(ctx, args.recordingId);
-    return toInvestigatorRecording(rec);
+    // Access-gated query: RETURN a structured "restricted" result instead of
+    // throwing, so a non-investigator gets a clean access-denied state rather
+    // than a hard page crash.
+    const role = await roleOf(ctx);
+    if (role !== "investigator" && role !== "admin") {
+      return { restricted: true as const };
+    }
+    const rec = await ctx.db.get(args.recordingId);
+    return {
+      restricted: false as const,
+      recording: rec ? toInvestigatorRecording(rec) : null,
+    };
   },
 });
 
