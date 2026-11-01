@@ -44,13 +44,7 @@ const SEVERITY_STYLE: Record<string, string> = {
   low: "bg-slate-100 text-slate-600",
 };
 
-const TRANSCRIPTION_STATUS: Record<string, string> = {
-  NOT_STARTED: "Not started",
-  PROCESSING: "Transcribing…",
-  COMPLETED: "Transcript ready",
-  FAILED: "Transcription failed",
-  UNAVAILABLE: "Transcription unavailable",
-};
+
 
 function fmtTime(ms?: number): string {
   if (typeof ms !== "number") return "";
@@ -77,11 +71,12 @@ export default function ConsumerVoiceResultPage() {
   );
 
   const [processing, setProcessing] = useState(false);
+  const processingTrigger = useRef(false);
   const [processError, setProcessError] = useState<string | null>(null);
   const [showTranscriptInput, setShowTranscriptInput] = useState(false);
   const [draftTranscript, setDraftTranscript] = useState("");
   const [savingTranscript, setSavingTranscript] = useState(false);
-  const autoStarted = useRef(false);
+
 
   const status = recording?.analysis.status;
   const isProcessingNow =
@@ -105,19 +100,19 @@ export default function ConsumerVoiceResultPage() {
   // Kick off processing once when the recording is first loaded and nothing
   // has been analysed yet.
   useEffect(() => {
-    if (!recording || autoStarted.current) return;
+    if (!recording) return;
     if (
       recording.analysis.status === "NOT_STARTED" &&
       recording.transcription.status !== "PROCESSING"
     ) {
-      autoStarted.current = true;
       void startProcessing();
     } else if (
       recording.analysis.status === "COMPLETED" ||
       recording.analysis.status === "FAILED" ||
       recording.analysis.status === "UNAVAILABLE"
     ) {
-      autoStarted.current = true;
+      // Nothing to do — already analysed (or the failure/unavailable state is
+      // final). Nothing to trigger here.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recording]);

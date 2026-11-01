@@ -9,7 +9,6 @@ import {
   XCircle,
   Loader2,
   FileAudio,
-  Lock,
   Clock,
   HelpCircle,
   MessageSquare,
@@ -35,6 +34,13 @@ const INTAKE_LABEL: Record<string, string> = {
   ACCEPTED: "Accepted",
   CLOSED: "Closed",
 };
+
+type VoiceIntakeStatus =
+  | "SUBMITTED"
+  | "UNDER_REVIEW"
+  | "MORE_INFORMATION_NEEDED"
+  | "ACCEPTED"
+  | "CLOSED";
 
 const VERDICT_LABEL: Record<string, string> = {
   accepted: "Accepted",
@@ -178,7 +184,19 @@ function VoiceIntakeDetail({
   const notes = (detail.internalNotes as { at: number; by: string; kind: string; text: string }[] | null) ?? [];
   const infoRequests = (detail.infoRequests as { at: number; question: string; answered: boolean }[] | null) ?? [];
 
-  const setStatus = async (status: Parameters<typeof setIntakeStatus>[1]["args"]["status"]) => {
+  const setStatus = async (status: VoiceIntakeStatus) => {
+    // The status union is narrower than the mutation's accepted set (see the
+    // INTAKE_LABEL map). `setIntakeStatus` accepts: SUBMITTED, UNDER_REVIEW,
+    // MORE_INFORMATION_NEEDED, ACCEPTED, CLOSED. Validate against the
+    // permitted values to keep the call honest.
+    const perm: Array<"SUBMITTED" | "UNDER_REVIEW" | "MORE_INFORMATION_NEEDED" | "ACCEPTED" | "CLOSED"> = [
+      "SUBMITTED",
+      "UNDER_REVIEW",
+      "MORE_INFORMATION_NEEDED",
+      "ACCEPTED",
+      "CLOSED",
+    ];
+    if (!perm.includes(status)) return;
     setBusy(true);
     try {
       await setIntakeStatus({ recordingId, status });

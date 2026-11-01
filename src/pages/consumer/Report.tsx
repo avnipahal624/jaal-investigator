@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import type { ForwardRefExoticComponent, RefAttributes } from "react";
 
 type Step = "category" | "details" | "review" | "success";
-type FileType = File;
 
 const FILE_MAX_BYTES = 4 * 1024 * 1024;
 const ALLOWED_TYPES = [

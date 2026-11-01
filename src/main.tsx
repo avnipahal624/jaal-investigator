@@ -60,6 +60,9 @@ const ConsumerVoiceCallPage = lazy(
 const ConsumerVoiceResultPage = lazy(
   () => import("./pages/consumer/VoiceResult.tsx"),
 );
+const ConsumerVoiceIntakePage = lazy(
+  () => import("./pages/VoiceIntakePage.tsx"),
+);
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -192,10 +195,10 @@ createRoot(document.getElementById("root")!).render(
                       element={<InvestigationCompletePage />}
                     />
                     <Route path="/evidence" element={<EvidencePage />} />
-                    <Route path="/voice-intake" element={<VoiceIntakePage />} />
+                    <Route path="/voice-intake" element={<ConsumerVoiceIntakePage />} />
                     <Route
                       path="/voice-intake/:recordingId"
-                      element={<VoiceIntakePage />}
+                      element={<ConsumerVoiceIntakePage />}
                     />
                     <Route path="/reports" element={<ReportsPage />} />
                     <Route path="/reports/:id" element={<ReportDetailPage />} />

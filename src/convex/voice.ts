@@ -44,7 +44,7 @@ export const ALLOWED_AUDIO_MIME = [
 ] as const;
 
 const MAX_TRANSCRIPT_CHARS = 60_000;
-const MAX_SEGMENT_COUNT = 400;
+
 const MAX_CONTEXT_CHARS = 4_000;
 
 export const CONSENT_VERSION = "voice-consent-1";
