@@ -131,6 +131,94 @@ export interface ConsumerAnalysisView {
 export type ConsumerCategoryKey =
   | "message"
   | "call"
+  | "voice"
   | "payment"
   | "link"
   | "other";
+
+// ---------------------------------------------------------------------------
+// Voice Call Scam Intelligence — local mirrors of the voice_recordings surface.
+// ---------------------------------------------------------------------------
+
+export type VoiceAssessment =
+  | "HIGH_CONCERN"
+  | "WARNING_SIGNS_FOUND"
+  | "NO_OBVIOUS_WARNING_SIGNS"
+  | "UNABLE_TO_ASSESS";
+
+export type VoiceProcessStatus =
+  | "NOT_STARTED"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED"
+  | "UNAVAILABLE";
+
+export interface VoiceSegment {
+  speaker?: string;
+  startMs?: number;
+  endMs?: number;
+  text: string;
+}
+
+export interface VoiceFinding {
+  id: string;
+  tactic: string;
+  category: string;
+  excerpt: string;
+  timestampMs?: number;
+  explanation: string;
+  confidence: "low" | "medium" | "high";
+  severity: "low" | "medium" | "high";
+  recommendedAction: string;
+  observed: boolean;
+}
+
+export interface VoiceRecordingView {
+  _id: string;
+  investigationId: string;
+  caseId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  fileHash: string;
+  hashAlgorithm: string;
+  durationSeconds: number | null;
+  consentAt: number;
+  consentVersion: string;
+  callerPhone: string | null;
+  claimedIdentity: string | null;
+  approximateCallAt: number | null;
+  whatHappened: string | null;
+  moneyRequested: boolean | null;
+  credentialsRequested: boolean | null;
+  moneyTransferredOrShared: boolean | null;
+  transcript: string | null;
+  transcriptSegments: VoiceSegment[] | null;
+  transcriptSource: "SPEECH_PROVIDER" | "CONSUMER_PROVIDED" | null;
+  transcription: {
+    status: VoiceProcessStatus;
+    provider: string | null;
+    error: string | null;
+    at: number | null;
+  };
+  analysis: {
+    status: VoiceProcessStatus;
+    assessment: VoiceAssessment | null;
+    summary: string | null;
+    findings: VoiceFinding[] | null;
+    recommendedSteps: string[] | null;
+    limitations: string[] | null;
+    provider: string | null;
+    model: string | null;
+    error: string | null;
+    at: number | null;
+  };
+  intakeStatus:
+    | "SUBMITTED"
+    | "UNDER_REVIEW"
+    | "MORE_INFORMATION_NEEDED"
+    | "ACCEPTED"
+    | "CLOSED";
+  createdAt: number;
+  updatedAt: number;
+}

@@ -7,12 +7,19 @@ export const ROLES = {
   ADMIN: "admin",
   USER: "user",
   MEMBER: "member",
+  // JAAL account kinds. A consumer is a "Normal People" reporter; an
+  // investigator is an authorised console operator. Both are enforced
+  // SERVER-SIDE from the stored `users.role` — never from a client flag.
+  CONSUMER: "consumer",
+  INVESTIGATOR: "investigator",
 } as const;
 
 export const roleValidator = v.union(
   v.literal(ROLES.ADMIN),
   v.literal(ROLES.USER),
   v.literal(ROLES.MEMBER),
+  v.literal(ROLES.CONSUMER),
+  v.literal(ROLES.INVESTIGATOR),
 );
 
 const flagsValidator = v.object({
@@ -371,6 +378,130 @@ const schema = defineSchema(
       acceptedBy: v.string(),
       acceptedAt: v.number(),
     }).index("by_investigation", ["investigationId"]),
+
+    /**
+     * JAAL VOICE SCAM INTELLIGENCE — one row per submitted call recording.
+     *
+     * The ORIGINAL uploaded audio is preserved untouched in Convex file
+     * storage (`storageId`); its SHA-256 (`fileHash`) is computed over the
+     * exact uploaded bytes and never recomputed over a modified copy.
+     *
+     * Transcription and AI analysis are stored SEPARATELY from the original
+     * recording. Neither can mutate `storageId`/`fileHash`. Each records which
+     * provider actually ran, and transcription/analysis failures are honest
+     * (an UNAVAILABLE/FAILED state is never dressed up as a result).
+     *
+     * Ownership: every read is scoped to `owner` (the consumer who uploaded)
+     * or to a verified investigator for the linked case. There is no public
+     * access path to the audio.
+     */
+    voice_recordings: defineTable({
+      /** Consumer report this recording belongs to (original report preserved). */
+      investigationId: v.id("investigations"),
+      owner: v.string(),
+      caseId: v.string(),
+
+      // Original file — preserved, never altered.
+      storageId: v.string(),
+      fileName: v.string(),
+      mimeType: v.string(),
+      sizeBytes: v.number(),
+      /** SHA-256 (lowercase hex) of the original uploaded bytes. */
+      fileHash: v.string(),
+      hashAlgorithm: v.string(),
+      durationSeconds: v.optional(v.number()),
+      /** Explicit consumer consent + privacy acknowledgement recorded at upload. */
+      consentAt: v.number(),
+      consentVersion: v.string(),
+
+      // Optional consumer-provided call context (all optional — never forced).
+      callerPhone: v.optional(v.string()),
+      claimedIdentity: v.optional(v.string()),
+      approximateCallAt: v.optional(v.number()),
+      whatHappened: v.optional(v.string()),
+      moneyRequested: v.optional(v.boolean()),
+      credentialsRequested: v.optional(v.boolean()),
+      moneyTransferredOrShared: v.optional(v.boolean()),
+
+      // Transcription — separate from analysis; honest about provider + status.
+      transcript: v.optional(v.string()),
+      /** [{ speaker, startMs, endMs, text }] — only when the provider supports it. */
+      transcriptSegments: v.optional(v.any()),
+      transcription: v.object({
+        status: v.union(
+          v.literal("NOT_STARTED"),
+          v.literal("PROCESSING"),
+          v.literal("COMPLETED"),
+          v.literal("FAILED"),
+          v.literal("UNAVAILABLE"),
+        ),
+        provider: v.optional(v.string()),
+        /** Failure category only ("no-provider" | "provider-error"). */
+        error: v.optional(v.string()),
+        at: v.optional(v.number()),
+      }),
+      /**
+       * When true the transcript text came from the consumer typing/pasting
+       * what was said, not from a speech-to-text provider. Kept distinct so the
+       * UI and investigators never mistake self-reported text for a machine
+       * transcript of the audio.
+       */
+      transcriptSource: v.optional(
+        v.union(v.literal("SPEECH_PROVIDER"), v.literal("CONSUMER_PROVIDED")),
+      ),
+
+      // AI voice-scam analysis — separate from transcription.
+      analysis: v.object({
+        status: v.union(
+          v.literal("NOT_STARTED"),
+          v.literal("PROCESSING"),
+          v.literal("COMPLETED"),
+          v.literal("FAILED"),
+          v.literal("UNAVAILABLE"),
+        ),
+        /** Overall assessment label — never a numeric fraud probability. */
+        assessment: v.optional(
+          v.union(
+            v.literal("HIGH_CONCERN"),
+            v.literal("WARNING_SIGNS_FOUND"),
+            v.literal("NO_OBVIOUS_WARNING_SIGNS"),
+            v.literal("UNABLE_TO_ASSESS"),
+          ),
+        ),
+        summary: v.optional(v.string()),
+        /** Validated structured findings — never rendered unvalidated. */
+        findings: v.optional(v.any()),
+        recommendedSteps: v.optional(v.array(v.string())),
+        limitations: v.optional(v.array(v.string())),
+        provider: v.optional(v.string()),
+        model: v.optional(v.string()),
+        /** Failure category only. */
+        error: v.optional(v.string()),
+        at: v.optional(v.number()),
+      }),
+
+      // Investigator linkage + review state (never overwrites AI output).
+      intakeStatus: v.union(
+        v.literal("SUBMITTED"),
+        v.literal("UNDER_REVIEW"),
+        v.literal("MORE_INFORMATION_NEEDED"),
+        v.literal("ACCEPTED"),
+        v.literal("CLOSED"),
+      ),
+      linkedInvestigationId: v.optional(v.id("investigations")),
+      reviewedBy: v.optional(v.string()),
+      reviewedAt: v.optional(v.number()),
+      /** Investigator per-finding verdicts, keyed by finding id — stored apart from AI. */
+      findingReviews: v.optional(v.any()),
+      internalNotes: v.optional(v.any()),
+      infoRequests: v.optional(v.any()),
+
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_owner", ["owner"])
+      .index("by_owner_case", ["owner", "caseId"])
+      .index("by_investigation", ["investigationId"]),
 
     /** Per-user settings (appearance / investigation / simulation). */
     settings: defineTable({

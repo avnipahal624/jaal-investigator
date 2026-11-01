@@ -12,10 +12,11 @@ const ALLOWED_TYPES = [
   "application/pdf",
 ];
 import { useMutation } from "convex/react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import {
   MessageSquare,
   Phone,
+  Mic,
   Receipt,
   Link as LinkIcon,
   HelpCircle,
@@ -46,6 +47,12 @@ export const CATEGORIES = [
     icon: Phone,
   },
   {
+    key: "voice" as const,
+    label: "Voice Call Scam",
+    description: "Analyse a call recording, or get live-call safety help.",
+    icon: Mic,
+  },
+  {
     key: "payment" as const,
     label: "Payment Request",
     description: "A request to send money or a payment link.",
@@ -65,11 +72,12 @@ export const CATEGORIES = [
   },
 ];
 
-export type ConsumerCategoryKey = "message" | "call" | "payment" | "link" | "other";
+export type ConsumerCategoryKey = "message" | "call" | "voice" | "payment" | "link" | "other";
 
 
 export default function ConsumerReportPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const createConsumerReport = useMutation(api.consumer.createConsumerReport);
 
   const preselectedCategory = (searchParams.get("category") as ConsumerCategoryKey | null) ?? null;
@@ -219,6 +227,12 @@ export default function ConsumerReportPage() {
   };
 
   const handleCategorySelect = (item: (typeof CATEGORIES)[number]) => {
+    // Voice Call Scam has its own dedicated experience (recording analysis +
+    // live protection). Route into it instead of the generic form.
+    if (item.key === "voice") {
+      navigate("/consumer/voice");
+      return;
+    }
     setCategory(item.key);
     setSelected(item.key);
     setStep("details");

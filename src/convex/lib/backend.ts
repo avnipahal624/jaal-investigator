@@ -7,6 +7,7 @@
  * → kill-chain update → strategy → activity events. Nothing here fabricates
  * findings: every detection is derived from actual message content.
  */
+import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type {
   DatabaseReader,
@@ -79,6 +80,45 @@ export async function getOwner(ctx: {
     );
   }
   return identity.subject;
+}
+
+/**
+ * Resolve the caller's REAL account role from the stored `users` record.
+ *
+ * This is the single server-side source of truth for JAAL authorisation. It
+ * is never derived from a client-supplied flag, a URL, or a frontend card.
+ * Returns `null` when the caller is not authenticated.
+ */
+export async function getAccountRole(
+  ctx: {
+    auth: { getUserIdentity(): Promise<{ subject: string } | null> };
+    db: DatabaseReader;
+  },
+): Promise<Doc<"users">["role"] | null> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.subject) return null;
+  const userId = await getAuthUserId(ctx as never);
+  if (!userId) return null;
+  const user = await ctx.db.get(userId);
+  return user?.role ?? null;
+}
+
+/** Throw unless the caller is authenticated with one of the given roles. */
+export async function requireRole(
+  ctx: {
+    auth: { getUserIdentity(): Promise<{ subject: string } | null> };
+    db: DatabaseReader;
+  },
+  roles: ("consumer" | "investigator")[],
+): Promise<string> {
+  const owner = await getOwner(ctx);
+  const role = await getAccountRole(ctx);
+  if (!role || !roles.includes(role as "consumer" | "investigator")) {
+    throw new Error(
+      `Access restricted to ${roles.join(" or ")} accounts. Your account is not authorised for this action.`,
+    );
+  }
+  return owner;
 }
 
 /** Throw a consistent authorization error for length/size violations. */

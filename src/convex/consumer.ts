@@ -17,6 +17,7 @@ export const CONSUMER_ROLE = "consumer";
 export const CONSUMER_CATEGORIES = [
   { key: "message", label: "Suspicious Message", icon: "message" },
   { key: "call", label: "Suspicious Phone Call", icon: "call" },
+  { key: "voice", label: "Voice Call Scam", icon: "voice" },
   { key: "payment", label: "Payment Request", icon: "payment" },
   { key: "link", label: "Suspicious Link", icon: "link" },
   { key: "other", label: "Something Else", icon: "other" },
@@ -28,6 +29,7 @@ export type ConsumerCategoryKey =
 const CONSUMER_CATEGORY_TITLE: Record<ConsumerCategoryKey, string> = {
   message: "Suspicious message",
   call: "Suspicious phone call",
+  voice: "Voice call scam",
   payment: "Payment request",
   link: "Suspicious link",
   other: "Suspicious activity",
@@ -36,6 +38,7 @@ const CONSUMER_CATEGORY_TITLE: Record<ConsumerCategoryKey, string> = {
 const CONSUMER_CATEGORY_CATEGORY: Record<ConsumerCategoryKey, string> = {
   message: "Phishing",
   call: "Impersonation",
+  voice: "Voice scam",
   payment: "UPI/payment scam",
   link: "Phishing",
   other: "Other",

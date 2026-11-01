@@ -18,6 +18,21 @@ export async function sha256Hex(content: string): Promise<string> {
     .join("");
 }
 
+/**
+ * SHA-256 of raw bytes (hex). Used for uploaded audio/evidence files where the
+ * hash must cover the exact original bytes, not a text encoding of them.
+ */
+export async function sha256HexBytes(bytes: ArrayBuffer): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    throw new Error("Web Crypto API unavailable (requires secure context)");
+  }
+  const digest = await subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export async function verifyHash(
   content: string,
   recordedHash: string,
