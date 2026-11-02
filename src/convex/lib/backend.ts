@@ -79,7 +79,17 @@ export async function getOwner(ctx: {
       "Not authenticated — an identity is required to access JAAL data.",
     );
   }
-  return identity.subject;
+  // The Convex Auth JWT subject is `<userId>|<sessionId>` (the sessionId part
+  // rotates on every sign-in). The owner key MUST be the stable userId so a
+  // user's reports and evidence survive sign-out/sign-in — this matches what
+  // `getAuthUserId` extracts and keeps `by_owner` lookups consistent.
+  const [userId] = identity.subject.split("|");
+  if (!userId) {
+    throw new Error(
+      "Not authenticated — an identity is required to access JAAL data.",
+    );
+  }
+  return userId;
 }
 
 /**

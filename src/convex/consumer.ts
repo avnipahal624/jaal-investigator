@@ -38,6 +38,37 @@ async function requireConsumer(ctx: QueryCtx): Promise<string> {
   return await getOwner(ctx);
 }
 
+/**
+ * Provision the consumer role for the signed-in account (idempotent).
+ *
+ * The consumer role lives on `users.role` and is enforced server-side by
+ * `requireRole` (used by the voice upload + analysis pipeline) — a fresh
+ * account has no role yet, so the mobile app calls this once after sign-in.
+ * An EXISTING role is never modified, so an investigator account stays an
+ * investigator: this can never escalate or downgrade privileges. It only ever
+ * fills in the default `consumer` role on an unassigned account.
+ */
+export const ensureConsumerRole = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const owner = await getOwner(ctx); // authentication is mandatory
+    const userId = owner as Id<"users">;
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new Error("User record not found for this session.");
+    }
+    if (user.role === CONSUMER_ROLE) {
+      return { role: CONSUMER_ROLE };
+    }
+    if (user.role) {
+      // An existing role (e.g. investigator) is left untouched.
+      return { role: user.role };
+    }
+    await ctx.db.patch(userId, { role: CONSUMER_ROLE });
+    return { role: CONSUMER_ROLE };
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Consumer category → investigation title + scam category mapping.
 // ---------------------------------------------------------------------------

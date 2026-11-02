@@ -1,6 +1,6 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "../services/api";
 
 /**
  * Auth state for the mobile app. Mirrors the investigator web `use-auth` so

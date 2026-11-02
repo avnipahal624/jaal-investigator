@@ -1,6 +1,10 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "paths": {
+      "@/*": ["../src/*"],
+      "@convex-api": ["../src/convex/_generated/api"]
+    }
   }
 }
