@@ -1,14 +1,42 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { DatabaseReader } from "./_generated/server";
+import type { DatabaseReader, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
   getOwner,
+  getAccountRole,
   AI_RATE_WINDOW_MS,
   AI_RATE_MAX,
 } from "./lib/backend";
 
 export const CONSUMER_ROLE = "consumer";
+
+/**
+ * Resolve the caller's consumer role SERVER-SIDE and return their owner id.
+ *
+ * The canonical role source is the stored `users.role` record (see
+ * `getAccountRole` in ./lib/backend). A federated freebuff JWT may instead
+ * carry a `role` claim directly on the identity; that claim takes precedence
+ * when present. An authenticated account with no role anywhere is treated as
+ * a consumer for these strictly owner-scoped reads — this never exposes
+ * another account's data, and every investigator-only function still goes
+ * through `requireRole`/`roleOf`, which demand an explicit stored
+ * `users.role` (so this default can never grant investigator access).
+ */
+async function requireConsumer(ctx: QueryCtx): Promise<string> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.subject) {
+    throw new Error(
+      "Not authenticated — an identity is required to access JAAL data.",
+    );
+  }
+  const storedRole = await getAccountRole(ctx);
+  const role = identity.role ?? storedRole ?? CONSUMER_ROLE;
+  if (role !== CONSUMER_ROLE) {
+    throw new Error("Consumer access restricted to Normal People accounts.");
+  }
+  return await getOwner(ctx);
+}
 
 // ---------------------------------------------------------------------------
 // Consumer category → investigation title + scam category mapping.
@@ -88,11 +116,7 @@ async function countEvidence(
 export const consumerDashboard = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity || identity.role !== CONSUMER_ROLE) {
-      throw new Error("Consumer access restricted to Normal People accounts.");
-    }
-    const owner = await getOwner(ctx);
+    const owner = await requireConsumer(ctx);
     const invDocs = await ctx.db
       .query("investigations")
       .withIndex("by_owner", (q) => q.eq("owner", owner))
@@ -131,11 +155,7 @@ export const consumerDashboard = query({
 export const consumerReports = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity || identity.role !== CONSUMER_ROLE) {
-      throw new Error("Consumer access restricted to Normal People accounts.");
-    }
-    const owner = await getOwner(ctx);
+    const owner = await requireConsumer(ctx);
     const docs = await ctx.db
       .query("investigations")
       .withIndex("by_owner", (q) => q.eq("owner", owner))
@@ -163,11 +183,7 @@ export const getConsumerEvidence = query({
     investigationId: v.id("investigations"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity || identity.role !== CONSUMER_ROLE) {
-      throw new Error("Consumer access restricted to Normal People accounts.");
-    }
-    const owner = await getOwner(ctx);
+    const owner = await requireConsumer(ctx);
     const inv = await ctx.db.get(args.investigationId);
     if (!inv || inv.owner !== owner) {
       // Either not found, or not owned by the caller — return nothing.
