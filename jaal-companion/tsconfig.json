@@ -4,7 +4,8 @@
     "strict": true,
     "paths": {
       "@/*": ["../src/*"],
-      "@convex-api": ["../src/convex/_generated/api"]
+      "@convex-api": ["../src/convex/_generated/api"],
+      "@convex-dataModel": ["../src/convex/_generated/dataModel"]
     }
   }
 }
