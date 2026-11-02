@@ -18,7 +18,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   scheme: "jaalcompanion",
   icon: "./assets/icon.png",
   userInterfaceStyle: "light",
-  newArchEnabled: true,
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.jaal.companion",
@@ -42,6 +41,26 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-audio",
     "expo-splash-screen",
+    // Inbound share-intent (Android ACTION_SEND + iOS share extension).
+    // Requires a prebuild/EAS build — the plugin mutates the native projects,
+    // so it has no effect in Expo Go. iOS needs BOTH rules or the share sheet
+    // will not offer this app for URL shares.
+    [
+      "expo-sharing",
+      {
+        ios: {
+          enabled: true,
+          activationRule: {
+            supportsText: true,
+            supportsWebUrlWithMaxCount: 1,
+          },
+        },
+        android: {
+          enabled: true,
+          singleShareMimeTypes: ["text/plain"],
+        },
+      },
+    ],
   ],
   extra: {
     convexUrl:

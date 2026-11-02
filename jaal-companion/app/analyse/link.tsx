@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAction, useMutation } from "convex/react";
 import { AnalysisResult } from "../../src/components/AnalysisResult";
@@ -21,7 +21,11 @@ export default function AnalyseLink() {
   const analyse = useAction(api.assistantActions.analyseConsumerContent);
   const createReport = useMutation(api.consumer.createConsumerReport);
 
-  const [url, setUrl] = useState("");
+  // Pre-filled when arriving from the share sheet (review-before-analysis).
+  const params = useLocalSearchParams<{ url?: string }>();
+  const [url, setUrl] = useState(
+    typeof params.url === "string" ? params.url : "",
+  );
   const [localCheck, setLocalCheck] = useState<LinkCheck | null>(null);
   const [result, setResult] = useState<ConsumerAnalysisResult | null>(null);
   const [busy, setBusy] = useState(false);

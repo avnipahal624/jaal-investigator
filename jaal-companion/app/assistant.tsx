@@ -7,10 +7,12 @@ import {
   Text,
   TextInput,
   View,
+  type ScrollViewInstance,
 } from "react-native";
 import { router } from "expo-router";
 import { useAction } from "convex/react";
 import { Button } from "../src/components/ui/Button";
+import { RequireAuth } from "../src/components/auth-gate";
 import { Screen } from "../src/components/ui/Screen";
 import { api } from "../src/services/api";
 import { colors, fontSize, radius, spacing } from "../src/theme";
@@ -34,7 +36,7 @@ export default function Assistant() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   async function send(text: string) {
     const question = text.trim();
@@ -62,6 +64,7 @@ export default function Assistant() {
   }
 
   return (
+    <RequireAuth>
     <Screen padded={false}>
       <View style={styles.header}>
         <Button label="←" variant="ghost" onPress={() => router.back()} />
@@ -156,6 +159,7 @@ export default function Assistant() {
         </View>
       </KeyboardAvoidingView>
     </Screen>
+    </RequireAuth>
   );
 }
 

@@ -8,7 +8,9 @@ export const emailOtp = Email({
   // This function can be asynchronous
   async generateVerificationToken() {
     const random: RandomReader = {
-      read(bytes: Uint8Array) {
+      // Typed as ArrayBuffer-backed (not ArrayBufferLike) so it satisfies
+      // crypto.getRandomValues under TypeScript 6's stricter DOM types.
+      read(bytes: Uint8Array<ArrayBuffer>) {
         crypto.getRandomValues(bytes);
       },
     };

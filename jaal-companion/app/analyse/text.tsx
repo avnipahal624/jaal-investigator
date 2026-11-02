@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { ScrollView, StyleSheet, Text } from "react-native";
 import { useAction, useMutation } from "convex/react";
 import { AnalysisResult } from "../../src/components/AnalysisResult";
@@ -15,7 +15,11 @@ export default function AnalyseText() {
   const analyse = useAction(api.assistantActions.analyseConsumerContent);
   const createReport = useMutation(api.consumer.createConsumerReport);
 
-  const [content, setContent] = useState("");
+  // Pre-filled when arriving from the share sheet (review-before-analysis).
+  const params = useLocalSearchParams<{ content?: string }>();
+  const [content, setContent] = useState(
+    typeof params.content === "string" ? params.content : "",
+  );
   const [result, setResult] = useState<ConsumerAnalysisResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);

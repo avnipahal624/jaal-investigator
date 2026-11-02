@@ -1,7 +1,8 @@
 import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import * as SecureStore from "expo-secure-store";
-import { Platform, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Platform } from "react-native";
 import { CONVEX_URL } from "../constants/convex";
 
 /**

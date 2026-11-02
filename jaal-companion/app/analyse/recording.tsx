@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { useAction, useMutation } from "convex/react";
+import type { Id } from "@convex-dataModel";
 import { Button } from "../../src/components/ui/Button";
 import { Card } from "../../src/components/ui/Card";
 import { Screen } from "../../src/components/ui/Screen";
@@ -106,7 +107,7 @@ export default function Recording() {
 
       // Kick off transcription + analysis (honest pending/unavailable states
       // are shown on the next screen). Don't block navigation on it.
-      void process({ recordingId }).catch(() => {});
+      void process({ recordingId: recordingId as Id<"voice_recordings"> }).catch(() => {});
 
       router.replace(`/analysis/${recordingId}`);
     } catch (e) {

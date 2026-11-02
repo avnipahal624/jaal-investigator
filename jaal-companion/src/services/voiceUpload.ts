@@ -20,13 +20,13 @@ export const ALLOWED_AUDIO_MIME = [
 ] as const;
 
 /** Read the picked file's raw bytes (works with the cache file:// URI). */
-export async function readBytes(uri: string): Promise<Uint8Array> {
+export async function readBytes(uri: string): Promise<Uint8Array<ArrayBuffer>> {
   const buf = await new File(uri).arrayBuffer();
   return new Uint8Array(buf);
 }
 
 /** SHA-256 (lowercase hex) of the exact bytes — verified server-side later. */
-export async function sha256Hex(bytes: Uint8Array): Promise<string> {
+export async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -36,7 +36,7 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 /** POST the raw bytes to the Convex upload URL; returns the storage id. */
 export async function uploadBytes(
   uploadUrl: string,
-  bytes: Uint8Array,
+  bytes: Uint8Array<ArrayBuffer>,
   mimeType: string,
 ): Promise<string> {
   const res = await fetch(uploadUrl, {

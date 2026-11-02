@@ -14,6 +14,20 @@ export function relativeTime(ts: number): string {
   return `${Math.round(month / 12)}y ago`;
 }
 
+/** Human-friendly file size (e.g. "2.4 MB"). */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i += 1;
+  }
+  const rounded = n < 10 && i > 0 ? n.toFixed(1) : String(Math.round(n));
+  return `${rounded} ${units[i]}`;
+}
+
 /** Locale date + short time for a timestamp. */
 export function formatDate(ts: number): string {
   try {
