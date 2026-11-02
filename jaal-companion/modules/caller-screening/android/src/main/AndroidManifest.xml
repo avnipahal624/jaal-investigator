@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!--
+    Call screening.
+
+    ANSWER_PHONE_CALLS lets the screening service decide the fate of a call
+    through CallScreeningService.respondToCall() (the telecom stack performs
+    the action — JAAL never touches call audio).
+
+    POST_NOTIFICATIONS is used ONLY to warn the user about a number that
+    matched JAAL threat intelligence. It is requested at runtime on Android
+    13+; without it the service still works, it just cannot post the warning.
+  -->
+  <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <!--
+    The call-screening service. The framework only binds to a service that
+    holds BIND_CALL_SCREENING_SERVICE (signature-level), and the user must
+    still grant JAAL the CALL_SCREENING role in system settings before this
+    is ever invoked. Declaring it here does NOT screen anything by itself.
+  -->
+  <service
+    android:name="com.jaal.companion.protection.JaalCallScreeningService"
+    android:exported="true"
+    android:permission="android.permission.BIND_CALL_SCREENING_SERVICE" />
+</manifest>

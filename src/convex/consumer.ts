@@ -23,7 +23,7 @@ export const CONSUMER_ROLE = "consumer";
  * through `requireRole`/`roleOf`, which demand an explicit stored
  * `users.role` (so this default can never grant investigator access).
  */
-async function requireConsumer(ctx: QueryCtx): Promise<string> {
+export async function requireConsumer(ctx: QueryCtx): Promise<string> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity?.subject) {
     throw new Error(

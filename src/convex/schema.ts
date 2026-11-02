@@ -511,6 +511,106 @@ const schema = defineSchema(
       simulation: v.any(),
       updatedAt: v.number(),
     }).index("by_owner", ["owner"]),
+
+    // ------------------------------------------------- JAAL PROTECTION ---
+
+    /**
+     * THREAT-INTELLIGENCE INDICATORS — shared, normalised, cross-user lookup
+     * store used by the consumer app's proactive protection features
+     * (caller screening, link protection, message checks).
+     *
+     * PROVENANCE IS FIRST-CLASS. `USER_REPORTED` means one or more JAAL users
+     * flagged this identifier; it is NOT proof of wrongdoing and is never
+     * presented as confirmed fraud. `VERIFIED` can only be set by an
+     * investigator through `protection:verifyIndicator`. The reporter's
+     * identity and their report contents are NEVER exposed by a lookup —
+     * only the normalised value, a short reason, aggregate counts and the
+     * provenance flag.
+     */
+    indicators: defineTable({
+      type: v.union(
+        v.literal("phone"),
+        v.literal("url"),
+        v.literal("domain"),
+        v.literal("upi"),
+        v.literal("message_pattern"),
+      ),
+      /** Normalised lookup key (see normalizeIndicator). */
+      value: v.string(),
+      /** Human-facing form — phone numbers are stored masked. */
+      displayValue: v.string(),
+      provenance: v.union(v.literal("USER_REPORTED"), v.literal("VERIFIED")),
+      /** Short justification from the reporter (capped; no private content). */
+      reason: v.string(),
+      reportCount: v.number(),
+      /** Distinct accounts that reported this indicator. */
+      reporterCount: v.number(),
+      sourceCaseId: v.optional(v.string()),
+      createdBy: v.string(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+      lastReportedAt: v.number(),
+      verifiedAt: v.optional(v.number()),
+      verifiedBy: v.optional(v.string()),
+    })
+      .index("by_type_value", ["type", "value"])
+      .index("by_type_updated", ["type", "updatedAt"]),
+
+    /**
+     * PROTECTION ALERTS — the user-visible history of meaningful security
+     * findings raised by JAAL. Every alert states what happened, why it was
+     * raised, the evidence/indicator behind it and a safe next step.
+     *
+     * `origin` separates a confirmed threat-intelligence match
+     * (`THREAT_INTEL`) from an AI-generated assessment (`AI_ANALYSIS`) so the
+     * two are never conflated in the UI.
+     */
+    protection_alerts: defineTable({
+      owner: v.string(),
+      kind: v.union(
+        v.literal("caller"),
+        v.literal("message"),
+        v.literal("link"),
+        v.literal("analysis"),
+        v.literal("report"),
+      ),
+      title: v.string(),
+      /** What happened. */
+      explanation: v.string(),
+      /** Which evidence or indicator triggered the alert. */
+      evidence: v.string(),
+      /** What the user can safely do next. */
+      recommendedAction: v.string(),
+      origin: v.union(v.literal("THREAT_INTEL"), v.literal("AI_ANALYSIS")),
+      indicatorType: v.optional(v.string()),
+      indicatorValue: v.optional(v.string()),
+      read: v.boolean(),
+      createdAt: v.number(),
+    })
+      .index("by_owner_created", ["owner", "createdAt"])
+      .index("by_owner_read", ["owner", "read"]),
+
+    /**
+     * PER-USER PROTECTION PREFERENCES — one row per owner. Defaults are
+     * all-off: no protection capability is ever enabled without an explicit
+     * user action, and every feature can be switched off again here.
+     */
+    protection_settings: defineTable({
+      owner: v.string(),
+      /** Caller protection (Android Call Screening role / iOS Call Directory). */
+      callerProtection: v.boolean(),
+      /** Notification / message protection (explicit notification access). */
+      messageProtection: v.boolean(),
+      /** Proactive link checks before opening a shared link. */
+      linkProtection: v.boolean(),
+      /** Consent to send submitted content to JAAL's AI provider for analysis. */
+      aiProcessing: v.boolean(),
+      /** Local notifications for security alerts. */
+      alertNotifications: v.boolean(),
+      /** Whether content shared INTO the app may be checked by JAAL. */
+      shareToJaal: v.boolean(),
+      updatedAt: v.number(),
+    }).index("by_owner", ["owner"]),
   },
   {
     schemaValidation: false,

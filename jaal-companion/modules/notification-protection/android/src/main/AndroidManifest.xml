@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!--
+    Optional message protection.
+
+    Android's notification-listener service is an OFFICIAL, user-activated
+    mechanism: the app can only read notifications after the user enables
+    "Notification access" for JAAL in system settings. Nothing is read before
+    that, and the user can revoke it there at any time.
+
+    This does NOT give access to message contents stored in the apps
+    themselves — only the small notification payload the OS posts.
+  -->
+  <service
+    android:name="com.jaal.companion.protection.JaalNotificationListenerService"
+    android:exported="true"
+    android:label="JAAL message protection"
+    android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+    <intent-filter>
+      <action android:name="android.service.notification.NotificationListenerService" />
+    </intent-filter>
+  </service>
+</manifest>
