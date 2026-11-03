@@ -44,7 +44,7 @@ function jsonResponse(body: unknown, status = 200) {
 describe("sttTranscriptionUrl", () => {
   it("appends the transcription path to a base URL", () => {
     expect(sttTranscriptionUrl(DEFAULT_STT_ENDPOINT)).toBe(
-      "https://api.openai.com/v1/audio/transcriptions",
+      "https://api.groq.com/openai/v1/audio/transcriptions",
     );
     expect(sttTranscriptionUrl("https://api.openai.com/v1/")).toBe(
       "https://api.openai.com/v1/audio/transcriptions",
@@ -86,14 +86,55 @@ describe("resolveSttConfig", () => {
     expect(config.configured === false && config.reason).toBe("invalid-endpoint");
   });
 
-  it("defaults the endpoint and model when only the key is set", () => {
-    const config = resolveSttConfig({ STT_API_KEY: "k" });
+  it("defaults to Groq's endpoint and turbo model when only the key is set", () => {
+    const config = resolveSttConfig({ GROQ_API_KEY: "gsk_test" });
     expect(config.configured).toBe(true);
     if (!config.configured) return;
-    expect(config.url).toBe("https://api.openai.com/v1/audio/transcriptions");
-    expect(config.model).toBe("whisper-1");
-    expect(config.name).toBe("openai-compatible-stt");
+    expect(config.url).toBe("https://api.groq.com/openai/v1/audio/transcriptions");
+    expect(config.model).toBe("whisper-large-v3-turbo");
+    expect(config.name).toBe("groq");
     expect(config.maxAttempts).toBe(2);
+  });
+
+  it("accepts GROQ_API_KEY as well as the generic STT_API_KEY", () => {
+    const viaGroq = resolveSttConfig({ GROQ_API_KEY: "gsk_test" });
+    expect(viaGroq.configured && viaGroq.apiKey).toBe("gsk_test");
+
+    const viaGeneric = resolveSttConfig({ STT_API_KEY: "generic" });
+    expect(viaGeneric.configured && viaGeneric.apiKey).toBe("generic");
+  });
+
+  it("prefers an explicit STT_API_KEY when both names are set", () => {
+    const config = resolveSttConfig({
+      STT_API_KEY: "explicit",
+      GROQ_API_KEY: "fallback",
+    });
+    expect(config.configured && config.apiKey).toBe("explicit");
+  });
+
+  it("trims a pasted key so the auth header stays valid", () => {
+    const config = resolveSttConfig({ GROQ_API_KEY: "  gsk_padded\n" });
+    expect(config.configured && config.apiKey).toBe("gsk_padded");
+  });
+
+  it("labels the provider from the endpoint instead of assuming Groq", () => {
+    const custom = resolveSttConfig({
+      GROQ_API_KEY: "k",
+      STT_ENDPOINT: "https://stt.example.test/v1",
+    });
+    expect(custom.configured && custom.name).toBe("openai-compatible-stt");
+
+    const openai = resolveSttConfig({
+      STT_API_KEY: "k",
+      STT_ENDPOINT: "https://api.openai.com/v1",
+    });
+    expect(openai.configured && openai.name).toBe("openai");
+
+    const named = resolveSttConfig({
+      GROQ_API_KEY: "k",
+      STT_PROVIDER_NAME: "  my-gateway ",
+    });
+    expect(named.configured && named.name).toBe("my-gateway");
   });
 
   it("clamps timeout and attempts to safe ranges", () => {
@@ -184,6 +225,44 @@ describe("parseSttResponse", () => {
 
 describe("transcribeAudio (mocked provider)", () => {
   const bytes = new Uint8Array([1, 2, 3, 4]);
+
+  it("calls Groq's documented endpoint with the configured key and model", async () => {
+    const stt = resolveSttConfig({ GROQ_API_KEY: "gsk_test" });
+    expect(stt.configured).toBe(true);
+    if (!stt.configured) return;
+
+    let seenUrl = "";
+    let seenAuth = "";
+    const fetchImpl = vi.fn(
+      async (
+        url: string,
+        init: { headers: Record<string, string>; body: FormData },
+      ) => {
+        seenUrl = url;
+        seenAuth = init.headers.Authorization;
+        expect(init.body.get("model")).toBe("whisper-large-v3-turbo");
+        expect(init.body.get("response_format")).toBe("verbose_json");
+        expect(init.body.get("timestamp_granularities[]")).toBe("segment");
+        return jsonResponse({
+          text: "hi",
+          language: "en",
+          segments: [{ start: 0, end: 1, text: "hi" }],
+        });
+      },
+    ) as unknown as FetchLike;
+
+    const result = await transcribeAudio({
+      config: stt,
+      bytes,
+      mimeType: "audio/m4a",
+      fetchImpl,
+    });
+
+    expect(seenUrl).toBe("https://api.groq.com/openai/v1/audio/transcriptions");
+    expect(seenAuth).toBe("Bearer gsk_test");
+    expect(result.text).toBe("hi");
+    expect(result.segments?.[0].startMs).toBe(0);
+  });
 
   it("sends auth, model, verbose_json and segment granularity", async () => {
     const fetchImpl = vi.fn(async (_url: string, init: { body: unknown }) => {

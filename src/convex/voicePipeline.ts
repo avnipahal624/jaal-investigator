@@ -32,8 +32,16 @@ export type SttResult = {
   diarized: boolean;
 };
 
-export const DEFAULT_STT_ENDPOINT = "https://api.openai.com/v1";
-export const DEFAULT_STT_MODEL = "whisper-1";
+/**
+ * Default speech-to-text provider: Groq Cloud's OpenAI-compatible audio API.
+ * `whisper-large-v3-turbo` is the multilingual turbo model ($0.04/audio-hour),
+ * and Groq returns `verbose_json` with real segment timestamps, which the
+ * grounding step needs. Both values remain overridable per deployment via
+ * STT_ENDPOINT / STT_MODEL, so any compatible provider still works.
+ */
+export const DEFAULT_STT_ENDPOINT = "https://api.groq.com/openai/v1";
+export const DEFAULT_STT_MODEL = "whisper-large-v3-turbo";
+export const DEFAULT_STT_PROVIDER_NAME = "groq";
 export const DEFAULT_STT_TIMEOUT_MS = 120_000;
 export const DEFAULT_STT_MAX_ATTEMPTS = 2;
 export const MAX_STT_SEGMENTS = 2_000;
@@ -100,17 +108,38 @@ function boundedInt(
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/**
+ * Label for the provider actually being called, so stored metadata never
+ * claims Groq when the endpoint points elsewhere. An explicit
+ * STT_PROVIDER_NAME always wins.
+ */
+function providerNameFor(endpointUrl: string, explicit: string | undefined): string {
+  const named = (explicit ?? "").trim();
+  if (named) return named;
+  try {
+    const host = new URL(endpointUrl).hostname;
+    if (host === "api.groq.com") return DEFAULT_STT_PROVIDER_NAME;
+    if (host === "api.openai.com") return "openai";
+  } catch {
+    // URL was already validated by sttTranscriptionUrl.
+  }
+  return "openai-compatible-stt";
+}
+
 /** Single source of truth for how a deployment configures speech-to-text. */
 export function resolveSttConfig(
   env: Record<string, string | undefined>,
 ): SttConfig {
-  const apiKey = (env.STT_API_KEY ?? "").trim();
+  // STT_API_KEY is the generic name; GROQ_API_KEY is accepted so a key added
+  // for Groq works without a second, differently named secret.
+  const apiKey =
+    (env.STT_API_KEY ?? "").trim() || (env.GROQ_API_KEY ?? "").trim();
   if (!apiKey) {
     return {
       configured: false,
       reason: "missing-key",
       detail:
-        "STT_API_KEY is not set on this deployment, so audio cannot be transcribed.",
+        "Neither GROQ_API_KEY nor STT_API_KEY is set on this deployment, so audio cannot be transcribed.",
     };
   }
 
@@ -126,7 +155,7 @@ export function resolveSttConfig(
 
   return {
     configured: true,
-    name: (env.STT_PROVIDER_NAME ?? "").trim() || "openai-compatible-stt",
+    name: providerNameFor(url, env.STT_PROVIDER_NAME),
     model: (env.STT_MODEL ?? "").trim() || DEFAULT_STT_MODEL,
     url,
     apiKey,

@@ -261,6 +261,17 @@ create → message (operator or simulated) → analysis (tactics + intent + stra
 - **ANTHROPIC** — set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`, default `claude-sonnet-4-5`) on the Convex deployment: `npx convex env set ANTHROPIC_API_KEY sk-ant-...`. Strategy and report actions then call Claude; the workspace labels the engine "Convex action — Anthropic Claude".
 - **SIMULATION** (default, no key required) — every action falls back to the deterministic rules engine and the UI is clearly labelled "Simulation mode — analysis engine".
 
+## Recorded-call transcription (Groq Cloud)
+
+Recorded-call audio is transcribed on the Convex backend by Groq's
+OpenAI-compatible audio API — `whisper-large-v3-turbo` with `verbose_json`, so
+real segment timestamps are available for grounding. Set `GROQ_API_KEY` (or the
+generic `STT_API_KEY`) on the deployment:
+`npx convex env set GROQ_API_KEY gsk_...`. `STT_MODEL`, `STT_ENDPOINT` and
+`STT_PROVIDER_NAME` override the defaults for another compatible provider, and
+the stored provider label is derived from the endpoint actually called. Without
+a key, transcription returns UNAVAILABLE rather than inventing a transcript.
+
 Convex-side keys are never exposed to the browser bundle.
 
 ## Security, privacy & evidence-integrity notes
