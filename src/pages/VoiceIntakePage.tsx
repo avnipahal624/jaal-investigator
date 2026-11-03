@@ -464,6 +464,8 @@ function VoiceIntakeDetailInvestigator({
   const setIntakeStatus = useMutation(api.voice.setIntakeStatus);
   const reviewFinding = useMutation(api.voice.reviewFinding);
   const addInternalNote = useMutation(api.voice.addInternalNote);
+  const requestMoreInfo = useMutation(api.voice.requestMoreInfo);
+  const [infoQuestion, setInfoQuestion] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -514,6 +516,10 @@ function VoiceIntakeDetailInvestigator({
       </div>
     );
   }  const findings = (detailData.analysis.findings as VoiceFinding[] | null) ?? [];
+  const indicators =
+    (detailData.analysis.indicators as
+      | { type: string; value: string; context?: string }[]
+      | null) ?? [];
   const reviews = (detailData.findingReviews as Record<string, { verdict: string }> | null) ?? {};
   const notes = (detailData.internalNotes as { at: number; by: string; kind: string; text: string }[] | null) ?? [];
 
@@ -708,10 +714,65 @@ function VoiceIntakeDetailInvestigator({
                         <span className="text-[11px] text-jmuted">
                           {review ? VERDICT_LABEL[review] : "Awaiting decision"}
                         </span>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void verdictFor(f.id, "accepted")}
+                          className={`border px-2 py-1 text-[11px] transition-colors ${
+                            review === "accepted"
+                              ? "border-jgreen/60 bg-jgreen/10 text-jgreen"
+                              : "border-jborder text-jmuted hover:text-jtext"
+                          }`}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void verdictFor(f.id, "rejected")}
+                          className={`border px-2 py-1 text-[11px] transition-colors ${
+                            review === "rejected"
+                              ? "border-jred/60 bg-jred/10 text-jred"
+                              : "border-jborder text-jmuted hover:text-jtext"
+                          }`}
+                        >
+                          Reject
+                        </button>
                       </div>
                     </li>
                   );
                 })}
+              </ul>
+            )}
+          </section>
+
+          {/* Extracted indicators — quoted from the transcript, NOT verified */}
+          <section className="jaal-panel p-4">
+            <h2 className="jaal-label mb-3">Extracted indicators</h2>
+            <p className="mb-3 text-[11px] text-jmuted">
+              Copied from what was said in the recording. These are not verified
+              indicators and are not matched against JAAL threat intelligence here.
+            </p>
+            {indicators.length === 0 ? (
+              <p className="text-sm text-jmuted">No identifiers were extracted.</p>
+            ) : (
+              <ul className="space-y-2">
+                {indicators.map((indicator, i) => (
+                  <li
+                    key={`${indicator.type}-${i}`}
+                    className="border border-jborder/60 bg-jsurface/60 p-3"
+                  >
+                    <span className="font-mono text-[10px] uppercase text-jmuted">
+                      {indicator.type.replace(/_/g, " ")}
+                    </span>
+                    <p className="text-sm font-medium text-jtext break-all">
+                      {indicator.value}
+                    </p>
+                    {indicator.context && (
+                      <p className="mt-1 text-xs text-jmuted">{indicator.context}</p>
+                    )}
+                  </li>
+                ))}
               </ul>
             )}
           </section>
@@ -783,6 +844,40 @@ function VoiceIntakeDetailInvestigator({
                 </li>
               ))}
             </ul>
+          </section>
+
+          <section className="jaal-panel p-4">
+            <h2 className="jaal-label mb-3">Request more information</h2>
+            <p className="text-[11px] text-jmuted">
+              Sends a question to the reporter and marks this intake as needing more
+              information. The original submission is preserved.
+            </p>
+            <textarea
+              rows={2}
+              value={infoQuestion}
+              onChange={(e) => setInfoQuestion(e.target.value)}
+              placeholder="What do you need from the reporter?"
+              className="mt-2 w-full bg-jsurface border border-jborder px-3 py-2 text-sm text-jtext"
+            />
+            <button
+              type="button"
+              disabled={busy || !infoQuestion.trim()}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await requestMoreInfo({
+                    recordingId,
+                    question: infoQuestion.trim(),
+                  });
+                  setInfoQuestion("");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="mt-2 border border-jborder px-3 py-1.5 text-xs text-jtext hover:bg-jsurface disabled:opacity-50"
+            >
+              Send request
+            </button>
           </section>
 
           <section className="jaal-panel p-4">

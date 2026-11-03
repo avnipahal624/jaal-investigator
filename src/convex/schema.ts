@@ -436,6 +436,8 @@ const schema = defineSchema(
           v.literal("UNAVAILABLE"),
         ),
         provider: v.optional(v.string()),
+        /** Language reported by the speech-to-text provider, when it says so. */
+        language: v.optional(v.string()),
         /** Failure category only ("no-provider" | "provider-error"). */
         error: v.optional(v.string()),
         at: v.optional(v.number()),
@@ -471,6 +473,12 @@ const schema = defineSchema(
         summary: v.optional(v.string()),
         /** Validated structured findings — never rendered unvalidated. */
         findings: v.optional(v.any()),
+        /**
+         * Identifiers quoted in the transcript (phone / URL / UPI / org /
+         * payment instruction). Extracted text, NOT verified intelligence —
+         * a match against the indicator database is a separate lookup.
+         */
+        indicators: v.optional(v.any()),
         recommendedSteps: v.optional(v.array(v.string())),
         limitations: v.optional(v.array(v.string())),
         provider: v.optional(v.string()),

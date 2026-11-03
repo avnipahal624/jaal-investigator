@@ -22,6 +22,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="analyse" />
+        <Stack.Screen name="voice" />
         <Stack.Screen name="analysis" />
         <Stack.Screen name="reports" />
       </Stack>

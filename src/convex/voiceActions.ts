@@ -49,15 +49,6 @@ import { callClaude, currentModel, sanitize } from "./ai";
 // transcript when it is absent.
 // ---------------------------------------------------------------------------
 
-type SttProvider = {
-  name: string;
-  /** Transcribe bytes → text with optional timestamped segments. */
-  transcribe: (
-    bytes: Buffer,
-    mimeType: string,
-  ) => Promise<{ text: string; segments?: Segment[] }>;
-};
-
 type Segment = {
   speaker?: string;
   startMs?: number;
@@ -65,19 +56,125 @@ type Segment = {
   text: string;
 };
 
+type SttResult = {
+  text: string;
+  /** Present only when the provider returns real segment timings. */
+  segments?: Segment[];
+  language?: string;
+  /** True only when the provider actually labels who spoke. */
+  diarized: boolean;
+};
+
+type SttProvider = {
+  name: string;
+  model: string;
+  /** Transcribe bytes → text with optional timestamped segments. */
+  transcribe: (bytes: Buffer, mimeType: string) => Promise<SttResult>;
+};
+
+const DEFAULT_STT_ENDPOINT = "https://api.openai.com/v1";
+const DEFAULT_STT_MODEL = "whisper-1";
+
+/** Accepts either a base URL or the full transcription path. */
+function sttTranscriptionUrl(base: string): string {
+  const trimmed = base.trim().replace(/\/+$/, "");
+  return trimmed.endsWith("/audio/transcriptions")
+    ? trimmed
+    : `${trimmed}/audio/transcriptions`;
+}
+
+function extensionFor(mimeType: string): string {
+  const mime = mimeType.toLowerCase();
+  if (mime.includes("wav")) return "wav";
+  if (mime.includes("mpeg") || mime.includes("mp3")) return "mp3";
+  if (mime.includes("mp4") || mime.includes("m4a")) return "m4a";
+  if (mime.includes("aac")) return "aac";
+  if (mime.includes("ogg")) return "ogg";
+  if (mime.includes("webm")) return "webm";
+  if (mime.includes("amr")) return "amr";
+  return "mp3";
+}
+
 /**
- * Returns the configured STT provider, or null when none is configured. This
- * is the single place the "can we actually transcribe?" question is answered.
+ * Speech-to-text provider — OpenAI-compatible `/audio/transcriptions`
+ * (OpenAI Whisper, and any self-hosted or gateway endpoint exposing the same
+ * shape, e.g. faster-whisper behind an OpenAI-compatible API).
+ *
+ * Configured with:
+ *   STT_API_KEY   required — without it there is NO provider and transcription
+ *                 honestly reports UNAVAILABLE (never a fabricated transcript)
+ *   STT_ENDPOINT  optional — base URL or full .../audio/transcriptions URL
+ *   STT_MODEL     optional — defaults to "whisper-1"
+ *   STT_PROVIDER_NAME  optional — display name recorded with the transcript
+ *
+ * We ask for `verbose_json` + segment granularity so real timing comes back.
+ * Whisper does not diarize, so no speaker labels are invented — `diarized` is
+ * false and segments carry no `speaker`.
  */
 function resolveSttProvider(): SttProvider | null {
   const apiKey = process.env.STT_API_KEY;
-  const endpoint = process.env.STT_ENDPOINT;
-  if (!apiKey || !endpoint) return null;
-  // A real integration would POST the audio to `endpoint` with `apiKey`.
-  // Because no specific STT vendor is configured for this project, we do not
-  // fabricate a call to an unknown API — we return null (no provider) rather
-  // than guess. When a vendor is chosen, implement `transcribe` here.
-  return null;
+  if (!apiKey) return null;
+
+  const url = sttTranscriptionUrl(
+    process.env.STT_ENDPOINT || DEFAULT_STT_ENDPOINT,
+  );
+  const model = process.env.STT_MODEL || DEFAULT_STT_MODEL;
+
+  return {
+    name: process.env.STT_PROVIDER_NAME || "openai-compatible-stt",
+    model,
+    async transcribe(bytes, mimeType) {
+      const form = new FormData();
+      form.append(
+        "file",
+        new Blob([new Uint8Array(bytes)], { type: mimeType }),
+        `recording.${extensionFor(mimeType)}`,
+      );
+      form.append("model", model);
+      form.append("response_format", "verbose_json");
+      form.append("timestamp_granularities[]", "segment");
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+      });
+
+      if (!res.ok) {
+        // Surface a bounded provider error; never swallow it into a "success".
+        const detail = await res.text().catch(() => "");
+        throw new Error(
+          `stt-http-${res.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`,
+        );
+      }
+
+      const data = (await res.json()) as {
+        text?: string;
+        language?: string;
+        segments?: { start?: number; end?: number; text?: string }[];
+      };
+
+      const segments: Segment[] = (data.segments ?? [])
+        .filter((s) => (s.text ?? "").trim().length > 0)
+        .slice(0, 2_000)
+        .map((s) => ({
+          ...(typeof s.start === "number"
+            ? { startMs: Math.max(0, Math.round(s.start * 1000)) }
+            : {}),
+          ...(typeof s.end === "number"
+            ? { endMs: Math.max(0, Math.round(s.end * 1000)) }
+            : {}),
+          text: (s.text ?? "").trim(),
+        }));
+
+      return {
+        text: (data.text ?? "").trim(),
+        segments: segments.length > 0 ? segments : undefined,
+        language: data.language,
+        diarized: false,
+      };
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +208,24 @@ const FINDING_SCHEMA = z.object({
   observed: z.boolean(),
 });
 
+/**
+ * An identifier the model literally saw in the transcript. `verified` is
+ * deliberately absent — nothing extracted from a transcript is intelligence
+ * until it is checked against the JAAL indicator database separately.
+ */
+const INDICATOR_SCHEMA = z.object({
+  type: z.enum([
+    "phone",
+    "url",
+    "upi",
+    "organization",
+    "payment_instruction",
+    "other",
+  ]),
+  value: z.string().min(1).max(200),
+  context: z.string().max(300).optional(),
+});
+
 const ANALYSIS_SCHEMA = z.object({
   overallAssessment: z.enum([
     "HIGH_CONCERN",
@@ -120,6 +235,7 @@ const ANALYSIS_SCHEMA = z.object({
   ]),
   summary: z.string().min(1).max(800),
   findings: z.array(FINDING_SCHEMA).max(40),
+  indicators: z.array(INDICATOR_SCHEMA).max(30).optional(),
   recommendedSteps: z.array(z.string().min(1).max(300)).max(10),
   limitations: z.array(z.string().min(1).max(300)).max(8),
 });
@@ -141,6 +257,7 @@ HOW TO REPORT FINDINGS:
 - For each finding give: tactic (short name), category (one of the enum), excerpt (a REAL quote from the transcript, trimmed), timestampMs (only if the transcript marks a time — otherwise omit), explanation (why this is a warning sign, citing the excerpt), confidence (low/medium/high), severity (low/medium/high), recommendedAction (a practical safety step), observed (true/false).
 - Indicators are WARNING SIGNS, not proof of a crime. Do not claim the caller's identity is verified. Do not invent facts absent from the transcript.
 - overallAssessment: HIGH_CONCERN (clear high-severity scam pattern), WARNING_SIGNS_FOUND (some warning signs but not a clear high-severity pattern), NO_OBVIOUS_WARNING_SIGNS (nothing scam-like observed — still not a guarantee it is safe), UNABLE_TO_ASSESS (transcript too short/unclear to judge).
+- indicators: identifiers that literally appear in the transcript — phone numbers, URLs, UPI IDs, organisation names the caller claims to represent, and payment instructions. Copy the value exactly as spoken/written. Leave the array empty if none appear. Never invent a number, link or UPI ID, and never claim an indicator is verified or already known to be a scam.
 - summary: 2-4 plain sentences for an everyday user.
 - recommendedSteps: practical, safe next steps (verify independently, never share OTP/PIN, contact bank via official number if money moved, report through the national cybercrime channel). Never tell them to open a suspicious link or pay anything.
 - limitations: honest caveats (e.g. transcript may be incomplete, indicators are not proof, identity unverified).
@@ -165,6 +282,23 @@ function sanitizeAnalysis(raw: AnalysisResult): AnalysisResult {
       recommendedAction: sanitize(f.recommendedAction, 400),
       observed: f.observed,
     })) as AnalysisResult["findings"],
+    ...(raw.indicators
+      ? {
+          // De-duplicate on type+value so a repeated number is listed once.
+          indicators: Array.from(
+            new Map(
+              raw.indicators.slice(0, 30).map((i) => [
+                `${i.type}:${i.value.toLowerCase()}`,
+                {
+                  type: i.type,
+                  value: sanitize(i.value, 200),
+                  ...(i.context ? { context: sanitize(i.context, 300) } : {}),
+                },
+              ]),
+            ).values(),
+          ),
+        }
+      : {}),
     recommendedSteps: raw.recommendedSteps
       .slice(0, 10)
       .map((s) => sanitize(s, 300)),
@@ -299,6 +433,10 @@ export const processRecording = action({
         : rec.transcriptSource === "CONSUMER_PROVIDED"
         ? "CONSUMER_PROVIDED"
         : null;
+    // Real timing from the provider, threaded into the analysis so a finding's
+    // timestamp is grounded in actual audio positions — never estimated here.
+    let transcriptSegments: Segment[] | null = null;
+    let transcriptLanguage: string | undefined;
 
     const provider = resolveSttProvider();
     if (provider) {
@@ -309,6 +447,8 @@ export const processRecording = action({
         const out = await provider.transcribe(bytes, rec.mimeType);
         transcriptText = out.text ?? "";
         transcriptSource = "SPEECH_PROVIDER";
+        transcriptSegments = out.segments ?? null;
+        transcriptLanguage = out.language;
         providersRan.transcription = provider.name;
         if (!transcriptText.trim()) {
           await ctx.runMutation(internal.voice.internalSetTranscription, {
@@ -339,6 +479,7 @@ export const processRecording = action({
           provider: provider.name,
           transcript: transcriptText,
           segments: out.segments,
+          language: transcriptLanguage,
         });
       } catch {
         await ctx.runMutation(internal.voice.internalSetTranscription, {
@@ -436,7 +577,11 @@ export const processRecording = action({
       .join("\n");
 
     try {
-      const userContent = buildTranscriptBlock(transcriptText, null, context);
+      const userContent = buildTranscriptBlock(
+        transcriptText,
+        transcriptSegments,
+        context,
+      );
       const raw = await callClaude(apiKey, VOICE_SYSTEM, userContent, 2_000);
       if (!raw) throw new Error("empty model response");
       const parsed = ANALYSIS_SCHEMA.safeParse(extractJson(sanitize(raw, 20_000)));
@@ -455,10 +600,12 @@ export const processRecording = action({
         assessment: clean.overallAssessment,
         summary: clean.summary,
         findings: findingsWithIds,
+        indicators: clean.indicators ?? [],
         recommendedSteps: clean.recommendedSteps,
         limitations: [
           ...clean.limitations,
           "These are warning signs based on the transcript, not proof of a crime. The caller's identity is not verified.",
+          "Contact details and links in the transcript are quoted as they were spoken; they have not been independently verified.",
           transcriptSource === "CONSUMER_PROVIDED"
             ? "This analysis used a written transcript you provided, not an automatic transcription of the audio."
             : "Transcript text comes from speech-to-text and may contain errors.",

@@ -66,6 +66,23 @@ export default function Home() {
           <Text style={styles.ctaArrow}>→</Text>
         </Pressable>
 
+        {/* Voice intelligence entry */}
+        <Pressable
+          onPress={() => router.push("/voice")}
+          accessibilityRole="button"
+          accessibilityLabel="Voice intelligence"
+          style={({ pressed }) => [styles.voiceCard, pressed && styles.ctaPressed]}
+        >
+          <Text style={styles.voiceEmoji}>🎙️</Text>
+          <View style={styles.voiceText}>
+            <Text style={styles.voiceTitle}>Voice Intelligence</Text>
+            <Text style={styles.voiceBody}>
+              Analyse a suspicious call recording, or get safety guidance during a call.
+            </Text>
+          </View>
+          <Text style={styles.voiceArrow}>→</Text>
+        </Pressable>
+
         {/* Protection overview */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Protection overview</Text>
@@ -166,6 +183,22 @@ function Stat({
 }
 
 const styles = StyleSheet.create({
+  voiceCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    minHeight: 72,
+  },
+  voiceEmoji: { fontSize: 26 },
+  voiceText: { flex: 1, gap: 2 },
+  voiceTitle: { fontSize: fontSize.base, fontWeight: "800", color: colors.deep },
+  voiceBody: { fontSize: fontSize.sm, color: colors.muted, lineHeight: 20 },
+  voiceArrow: { fontSize: fontSize.lg, color: colors.primary, fontWeight: "800" },
   content: { paddingBottom: spacing.xxl, gap: spacing.lg },
   header: {
     flexDirection: "row",

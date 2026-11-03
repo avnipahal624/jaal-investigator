@@ -71,6 +71,19 @@ type Finding = {
   observed: boolean;
 };
 
+/** An identifier quoted in the transcript — extracted text, never verified. */
+type Indicator = {
+  type:
+    | "phone"
+    | "url"
+    | "upi"
+    | "organization"
+    | "payment_instruction"
+    | "other";
+  value: string;
+  context?: string;
+};
+
 type AnalysisStatus =
   | "NOT_STARTED"
   | "PROCESSING"
@@ -145,6 +158,7 @@ function toConsumerRecording(rec: Doc<"voice_recordings">) {
     transcription: {
       status: rec.transcription.status,
       provider: rec.transcription.provider ?? null,
+      language: rec.transcription.language ?? null,
       error: rec.transcription.error ?? null,
       at: rec.transcription.at ?? null,
     },
@@ -153,6 +167,7 @@ function toConsumerRecording(rec: Doc<"voice_recordings">) {
       assessment: rec.analysis.assessment ?? null,
       summary: rec.analysis.summary ?? null,
       findings: (rec.analysis.findings as Finding[] | null) ?? null,
+      indicators: (rec.analysis.indicators as Indicator[] | null) ?? null,
       recommendedSteps: rec.analysis.recommendedSteps ?? null,
       limitations: rec.analysis.limitations ?? null,
       provider: rec.analysis.provider ?? null,
@@ -500,6 +515,7 @@ export const internalSetTranscription = internalMutation({
       v.literal("UNAVAILABLE"),
     ),
     provider: v.optional(v.string()),
+    language: v.optional(v.string()),
     error: v.optional(v.string()),
     transcript: v.optional(v.string()),
     segments: v.optional(
@@ -519,6 +535,7 @@ export const internalSetTranscription = internalMutation({
       transcription: {
         status: args.status,
         provider: args.provider,
+        language: args.language,
         error: args.error,
         at: now,
       },
@@ -559,6 +576,7 @@ export const internalSetAnalysis = internalMutation({
     ),
     summary: v.optional(v.string()),
     findings: v.optional(v.any()),
+    indicators: v.optional(v.any()),
     recommendedSteps: v.optional(v.array(v.string())),
     limitations: v.optional(v.array(v.string())),
     provider: v.optional(v.string()),
@@ -573,6 +591,7 @@ export const internalSetAnalysis = internalMutation({
         assessment: args.assessment,
         summary: args.summary,
         findings: args.findings,
+        indicators: args.indicators,
         recommendedSteps: args.recommendedSteps,
         limitations: args.limitations,
         provider: args.provider,
