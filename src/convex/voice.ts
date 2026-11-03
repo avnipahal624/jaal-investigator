@@ -484,6 +484,8 @@ export const internalGetRecording = internalQuery({
       fileHash: rec.fileHash,
       transcript: rec.transcript ?? null,
       transcriptSource: rec.transcriptSource ?? null,
+      transcriptSegments: rec.transcriptSegments ?? null,
+      transcriptLanguage: rec.transcription?.language ?? null,
       callerPhone: rec.callerPhone ?? null,
       claimedIdentity: rec.claimedIdentity ?? null,
       moneyRequested: rec.moneyRequested ?? false,

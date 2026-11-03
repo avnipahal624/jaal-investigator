@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation } from "convex/react";
 import { Button } from "../../../components/ui/Button";
@@ -39,49 +39,64 @@ export function RecordingAnalysisScreen() {
   const [credentialsRequested, setCredentialsRequested] = useState(false);
   const [stage, setStage] = useState<"idle" | "uploading" | "processing">("idle");
   const [error, setError] = useState<string | null>(null);
+  // Set once the report exists, so a retry re-runs processing instead of
+  // uploading the same file again and creating a duplicate report.
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   const busy = stage !== "idle";
 
   async function submit() {
+    if (busy) return;
     if (!file) {
       setError("Choose a recording first.");
       return;
     }
-    if (!consent) {
+    if (!consent && !createdId) {
       setError("Please confirm your consent before uploading.");
       return;
     }
 
     setError(null);
-    setStage("uploading");
     try {
-      const created = await uploadRecording({
-        file,
-        generateUploadUrl: () => generateUploadUrl({}),
-        createVoiceReport,
-        context: {
-          callerPhone: callerPhone.trim() || undefined,
-          claimedIdentity: claimedIdentity.trim() || undefined,
-          whatHappened: whatHappened.trim() || undefined,
-          moneyRequested: moneyRequested || undefined,
-          credentialsRequested: credentialsRequested || undefined,
-        },
-      });
+      let recordingId = createdId;
+
+      if (!recordingId) {
+        setStage("uploading");
+        const created = await uploadRecording({
+          file,
+          generateUploadUrl: () => generateUploadUrl({}),
+          createVoiceReport,
+          context: {
+            callerPhone: callerPhone.trim() || undefined,
+            claimedIdentity: claimedIdentity.trim() || undefined,
+            whatHappened: whatHappened.trim() || undefined,
+            moneyRequested: moneyRequested || undefined,
+            credentialsRequested: credentialsRequested || undefined,
+          },
+        });
+        recordingId = created.recordingId;
+        setCreatedId(recordingId);
+      }
 
       setStage("processing");
-      // Navigate first so the user sees live status while the server works.
-      router.replace(`/voice/${created.recordingId}`);
+      // Navigate first so the user watches live status while the server works.
+      router.replace(`/voice/${recordingId}`);
 
-      const outcome = await processRecording(created.recordingId, runProcessing);
-      if (!outcome.ok) {
-        // The result screen also offers a retry; nothing is invented here.
-        setError(outcome.message);
+      try {
+        await processRecording(recordingId, runProcessing);
+      } catch (err) {
+        // The report already exists; say so, and let the results screen retry.
+        Alert.alert(
+          "Processing didn’t start",
+          err instanceof Error
+            ? err.message
+            : "Open this analysis and tap Retry when you’re back online.",
+        );
       }
     } catch (err) {
-      // The file and consent are kept, so this can be retried safely.
-      setError(
-        err instanceof Error ? err.message : "Upload failed. Please try again.",
-      );
+      // The file and consent are kept (and no report was created), so this can
+      // be retried safely without creating a duplicate.
+      setError(uploadFailureMessage(err));
       setStage("idle");
     }
   }
@@ -179,6 +194,14 @@ export function RecordingAnalysisScreen() {
       </ScrollView>
     </Screen>
   );
+}
+
+function uploadFailureMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : "";
+  if (/network|failed to fetch|offline|timed out/i.test(message)) {
+    return "You appear to be offline. Your file is still selected — reconnect and try again.";
+  }
+  return message || "Upload failed. Please try again.";
 }
 
 function ToggleRow({

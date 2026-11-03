@@ -39,7 +39,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-secure-store",
-    "expo-audio",
+    // Playback only. JAAL never records audio, so the plugin's default
+    // microphone permission is explicitly disabled: without this, the Android
+    // manifest requests RECORD_AUDIO and iOS adds a microphone usage string,
+    // which would contradict the product's no-recording guarantee.
+    [
+      "expo-audio",
+      {
+        microphonePermission: false,
+        recordAudioAndroid: false,
+        // Foreground playback not needed: recordings are reviewed on screen.
+        enableBackgroundPlayback: false,
+      },
+    ],
     "expo-splash-screen",
     // Inbound share-intent (Android ACTION_SEND + iOS share extension).
     // Requires a prebuild/EAS build — the plugin mutates the native projects,

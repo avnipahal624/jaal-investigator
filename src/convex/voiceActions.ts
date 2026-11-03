@@ -38,144 +38,19 @@ import { v } from "convex/values";
 import { z } from "zod";
 import { internal } from "./_generated/api";
 import { callClaude, currentModel, sanitize } from "./ai";
+import {
+  buildTranscriptBlock,
+  describeSttError,
+  groundFindings,
+  groundIndicators,
+  resolveSttConfig,
+  transcribeAudio,
+  type SttConfig,
+  type SttSegment,
+} from "./voicePipeline";
 
-// ---------------------------------------------------------------------------
-// Speech-to-text provider configuration (optional).
-//
-// A real deployment sets ONE of these to transcribe audio server-side. None is
-// configured by default in this project, so transcription honestly reports
-// UNAVAILABLE. This slot exists so a provider (e.g. a hosted STT API) can be
-// dropped in WITHOUT touching the analysis path — and WITHOUT ever inventing a
-// transcript when it is absent.
-// ---------------------------------------------------------------------------
-
-type Segment = {
-  speaker?: string;
-  startMs?: number;
-  endMs?: number;
-  text: string;
-};
-
-type SttResult = {
-  text: string;
-  /** Present only when the provider returns real segment timings. */
-  segments?: Segment[];
-  language?: string;
-  /** True only when the provider actually labels who spoke. */
-  diarized: boolean;
-};
-
-type SttProvider = {
-  name: string;
-  model: string;
-  /** Transcribe bytes → text with optional timestamped segments. */
-  transcribe: (bytes: Buffer, mimeType: string) => Promise<SttResult>;
-};
-
-const DEFAULT_STT_ENDPOINT = "https://api.openai.com/v1";
-const DEFAULT_STT_MODEL = "whisper-1";
-
-/** Accepts either a base URL or the full transcription path. */
-function sttTranscriptionUrl(base: string): string {
-  const trimmed = base.trim().replace(/\/+$/, "");
-  return trimmed.endsWith("/audio/transcriptions")
-    ? trimmed
-    : `${trimmed}/audio/transcriptions`;
-}
-
-function extensionFor(mimeType: string): string {
-  const mime = mimeType.toLowerCase();
-  if (mime.includes("wav")) return "wav";
-  if (mime.includes("mpeg") || mime.includes("mp3")) return "mp3";
-  if (mime.includes("mp4") || mime.includes("m4a")) return "m4a";
-  if (mime.includes("aac")) return "aac";
-  if (mime.includes("ogg")) return "ogg";
-  if (mime.includes("webm")) return "webm";
-  if (mime.includes("amr")) return "amr";
-  return "mp3";
-}
-
-/**
- * Speech-to-text provider — OpenAI-compatible `/audio/transcriptions`
- * (OpenAI Whisper, and any self-hosted or gateway endpoint exposing the same
- * shape, e.g. faster-whisper behind an OpenAI-compatible API).
- *
- * Configured with:
- *   STT_API_KEY   required — without it there is NO provider and transcription
- *                 honestly reports UNAVAILABLE (never a fabricated transcript)
- *   STT_ENDPOINT  optional — base URL or full .../audio/transcriptions URL
- *   STT_MODEL     optional — defaults to "whisper-1"
- *   STT_PROVIDER_NAME  optional — display name recorded with the transcript
- *
- * We ask for `verbose_json` + segment granularity so real timing comes back.
- * Whisper does not diarize, so no speaker labels are invented — `diarized` is
- * false and segments carry no `speaker`.
- */
-function resolveSttProvider(): SttProvider | null {
-  const apiKey = process.env.STT_API_KEY;
-  if (!apiKey) return null;
-
-  const url = sttTranscriptionUrl(
-    process.env.STT_ENDPOINT || DEFAULT_STT_ENDPOINT,
-  );
-  const model = process.env.STT_MODEL || DEFAULT_STT_MODEL;
-
-  return {
-    name: process.env.STT_PROVIDER_NAME || "openai-compatible-stt",
-    model,
-    async transcribe(bytes, mimeType) {
-      const form = new FormData();
-      form.append(
-        "file",
-        new Blob([new Uint8Array(bytes)], { type: mimeType }),
-        `recording.${extensionFor(mimeType)}`,
-      );
-      form.append("model", model);
-      form.append("response_format", "verbose_json");
-      form.append("timestamp_granularities[]", "segment");
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: form,
-      });
-
-      if (!res.ok) {
-        // Surface a bounded provider error; never swallow it into a "success".
-        const detail = await res.text().catch(() => "");
-        throw new Error(
-          `stt-http-${res.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`,
-        );
-      }
-
-      const data = (await res.json()) as {
-        text?: string;
-        language?: string;
-        segments?: { start?: number; end?: number; text?: string }[];
-      };
-
-      const segments: Segment[] = (data.segments ?? [])
-        .filter((s) => (s.text ?? "").trim().length > 0)
-        .slice(0, 2_000)
-        .map((s) => ({
-          ...(typeof s.start === "number"
-            ? { startMs: Math.max(0, Math.round(s.start * 1000)) }
-            : {}),
-          ...(typeof s.end === "number"
-            ? { endMs: Math.max(0, Math.round(s.end * 1000)) }
-            : {}),
-          text: (s.text ?? "").trim(),
-        }));
-
-      return {
-        text: (data.text ?? "").trim(),
-        segments: segments.length > 0 ? segments : undefined,
-        language: data.language,
-        diarized: false,
-      };
-    },
-  };
-}
+// Speech-to-text configuration, URL validation, timeout/retry and response
+// parsing live in ./voicePipeline, where they are unit-tested directly.
 
 // ---------------------------------------------------------------------------
 // Voice-scam analysis schema (validated — never rendered unvalidated).
@@ -316,34 +191,6 @@ function extractJson(text: string): unknown | null {
   }
 }
 
-/** Bounded, delimited transcript block sent to the provider as untrusted data. */
-function buildTranscriptBlock(
-  text: string,
-  segments: Segment[] | null,
-  context: string,
-): string {
-  const MAX_CHARS = 24_000;
-  let body = "";
-  if (segments && segments.length > 0) {
-    body = segments
-      .slice(0, 400)
-      .map((s) => {
-        const t =
-          typeof s.startMs === "number"
-            ? `[${(s.startMs / 1000).toFixed(1)}s]`
-            : "";
-        const who = s.speaker ? `${s.speaker}: ` : "";
-        return `${t} ${who}${s.text}`;
-      })
-      .join("\n");
-  } else {
-    body = text;
-  }
-  if (body.length > MAX_CHARS) body = body.slice(0, MAX_CHARS);
-  const ctxBlock = context ? `<call_context>\n${context}\n</call_context>\n\n` : "";
-  return `${ctxBlock}<transcript>\n${body}\n</transcript>`;
-}
-
 export const processRecording = action({
   args: { recordingId: v.id("voice_recordings") },
   handler: async (ctx: ActionCtx, args): Promise<{
@@ -362,6 +209,8 @@ export const processRecording = action({
       fileHash: string;
       transcript: string | null;
       transcriptSource: string | null;
+      transcriptSegments?: { speaker?: string; startMs?: number; endMs?: number; text: string }[] | null;
+      transcriptLanguage?: string | null;
       callerPhone: string | null;
       claimedIdentity: string | null;
       moneyRequested: boolean;
@@ -435,26 +284,34 @@ export const processRecording = action({
         : null;
     // Real timing from the provider, threaded into the analysis so a finding's
     // timestamp is grounded in actual audio positions — never estimated here.
-    let transcriptSegments: Segment[] | null = null;
-    let transcriptLanguage: string | undefined;
+    // Segments already stored from an earlier run are reused, so a retry does
+    // not lose real timings just because the provider call failed this time.
+    let transcriptSegments: SttSegment[] | null =
+      (rec.transcriptSegments as SttSegment[] | null) ?? null;
+    let transcriptLanguage: string | undefined =
+      rec.transcriptLanguage ?? undefined;
 
-    const provider = resolveSttProvider();
-    if (provider) {
+    const stt: SttConfig = resolveSttConfig(process.env);
+    if (stt.configured) {
       await ctx.runMutation(internal.voice.internalMarkTranscribing, {
         recordingId: args.recordingId,
       });
       try {
-        const out = await provider.transcribe(bytes, rec.mimeType);
+        const out = await transcribeAudio({
+          config: stt,
+          bytes: new Uint8Array(bytes),
+          mimeType: rec.mimeType,
+        });
         transcriptText = out.text ?? "";
         transcriptSource = "SPEECH_PROVIDER";
         transcriptSegments = out.segments ?? null;
         transcriptLanguage = out.language;
-        providersRan.transcription = provider.name;
+        providersRan.transcription = stt.name;
         if (!transcriptText.trim()) {
           await ctx.runMutation(internal.voice.internalSetTranscription, {
             recordingId: args.recordingId,
             status: "FAILED",
-            provider: provider.name,
+            provider: stt.name,
             error: "empty-transcript",
           });
           await ctx.runMutation(internal.voice.internalSetAnalysis, {
@@ -476,17 +333,19 @@ export const processRecording = action({
         await ctx.runMutation(internal.voice.internalSetTranscription, {
           recordingId: args.recordingId,
           status: "COMPLETED",
-          provider: provider.name,
+          provider: stt.name,
           transcript: transcriptText,
           segments: out.segments,
           language: transcriptLanguage,
         });
-      } catch {
+      } catch (err) {
+        // Store the real (bounded) reason so the UI can say what failed
+        // without exposing the key or an unbounded provider payload.
         await ctx.runMutation(internal.voice.internalSetTranscription, {
           recordingId: args.recordingId,
           status: "FAILED",
-          provider: provider.name,
-          error: "provider-error",
+          provider: stt.name,
+          error: describeSttError(err),
         });
         await ctx.runMutation(internal.voice.internalSetAnalysis, {
           recordingId: args.recordingId,
@@ -505,12 +364,17 @@ export const processRecording = action({
         };
       }
     } else if (!transcriptText.trim()) {
-      // No provider AND no consumer transcript → we cannot analyse. Honest
-      // UNAVAILABLE, with a clear reason and a path forward.
+      // No usable provider AND no consumer transcript → we cannot analyse.
+      // Honest UNAVAILABLE, with the actual configuration reason.
+      const configIssue = stt.configured
+        ? "no-provider"
+        : stt.reason === "invalid-endpoint"
+          ? "invalid-stt-endpoint"
+          : "no-provider";
       await ctx.runMutation(internal.voice.internalSetTranscription, {
         recordingId: args.recordingId,
         status: "UNAVAILABLE",
-        error: "no-provider",
+        error: configIssue,
       });
       await ctx.runMutation(internal.voice.internalSetAnalysis, {
         recordingId: args.recordingId,
@@ -518,7 +382,11 @@ export const processRecording = action({
         assessment: "UNABLE_TO_ASSESS",
         error: "no-transcript",
         limitations: [
-          "Speech-to-text is not configured on this deployment, and no written transcript was provided, so the audio could not be analysed. You can add what was said and analyse that instead.",
+          stt.configured
+            ? "Speech-to-text returned nothing and no written transcript was provided, so the audio could not be analysed. You can retry or add what was said yourself."
+            : stt.reason === "invalid-endpoint"
+              ? "Speech-to-text is misconfigured on this deployment (the endpoint is not a valid http(s) URL), and no written transcript was provided, so the audio could not be analysed. You can add what was said and analyse that instead."
+              : "Speech-to-text is not configured on this deployment, and no written transcript was provided, so the audio could not be analysed. You can add what was said and analyse that instead.",
         ],
       });
       return {
@@ -549,7 +417,7 @@ export const processRecording = action({
         ],
       });
       return {
-        transcriptionStatus: transcriptSource === "SPEECH_PROVIDER" ? "COMPLETED" : "COMPLETED",
+        transcriptionStatus: "COMPLETED",
         analysisStatus: "UNAVAILABLE",
         assessment: "UNABLE_TO_ASSESS",
         providersRan,
@@ -589,7 +457,21 @@ export const processRecording = action({
       const clean = sanitizeAnalysis(parsed.data);
       providersRan.analysis = currentModel();
 
-      const findingsWithIds = clean.findings.map((f, i) => ({
+      // Ground the model's output in the recording before storing it: a
+      // timestamp must land on a real segment start, an extracted identifier
+      // must appear in the transcript, and an "observed" quote that is not
+      // actually in the transcript is downgraded to an interpretation.
+      const groundedFindings = groundFindings(
+        clean.findings,
+        transcriptSegments,
+        transcriptText,
+      );
+      const groundedIndicators = groundIndicators(
+        clean.indicators ?? [],
+        transcriptText,
+      );
+
+      const findingsWithIds = groundedFindings.findings.map((f, i) => ({
         ...f,
         id: `f${i + 1}`,
       }));
@@ -600,10 +482,25 @@ export const processRecording = action({
         assessment: clean.overallAssessment,
         summary: clean.summary,
         findings: findingsWithIds,
-        indicators: clean.indicators ?? [],
+        indicators: groundedIndicators.indicators,
         recommendedSteps: clean.recommendedSteps,
         limitations: [
           ...clean.limitations,
+          ...(groundedFindings.droppedTimestamps > 0
+            ? [
+                `${groundedFindings.droppedTimestamps} AI timestamp(s) did not match a transcript segment and were removed.`,
+              ]
+            : []),
+          ...(groundedFindings.unobservedExcerpts > 0
+            ? [
+                `${groundedFindings.unobservedExcerpts} finding(s) claimed a direct quote that was not found in the transcript, so they are shown as interpretation only.`,
+              ]
+            : []),
+          ...(groundedIndicators.dropped > 0
+            ? [
+                "Some suggested identifiers did not appear in the transcript and were not stored.",
+              ]
+            : []),
           "These are warning signs based on the transcript, not proof of a crime. The caller's identity is not verified.",
           "Contact details and links in the transcript are quoted as they were spoken; they have not been independently verified.",
           transcriptSource === "CONSUMER_PROVIDED"
