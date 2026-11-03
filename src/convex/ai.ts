@@ -104,44 +104,10 @@ function buildTranscriptBlock(lines: TranscriptLine[]): string {
   return `<transcript>\n${block}\n</transcript>`;
 }
 
-/** Provider model identifier — configured, never invented. */
-export function currentModel(): string {
-  return process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
-}
-
-export async function callClaude(
-  apiKey: string,
-  system: string,
-  userContent: string,
-  maxTokens: number,
-): Promise<string | null> {
-  const model = currentModel();
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: userContent }],
-    }),
-    // Hard timeout: a hung provider request must fall back to SIMULATION,
-    // not stall the action until Convex's runtime limit.
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) {
-    throw new Error(`Anthropic API ${res.status}`);
-  }
-  const data = (await res.json()) as {
-    content?: { type: string; text?: string }[];
-  };
-  const text = data.content?.find((c) => c.type === "text")?.text;
-  return text ?? null;
-}
+// Transport lives in ./anthropicClient so it can be unit-tested without
+// Convex generated imports. Re-exported here to keep existing callers stable.
+import { callClaude } from "./anthropicClient";
+export { callClaude, currentModel, AnthropicError } from "./anthropicClient";
 
 export function extractJson(text: string): unknown | null {
   const match = text.match(/\{[\s\S]*\}/);
