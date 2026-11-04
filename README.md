@@ -248,7 +248,7 @@ The investigation workflow runs on the managed Convex deployment — there is no
 - `src/convex/schema.ts` — tables: `investigations`, `sessions`, `messages`, `evidence`, `tactics`, `events`, `logs`, `strategies`, `reports`, `settings`, `users`.
 - `src/convex/jaal.ts` — public queries/mutations: `state` (reactive workspace snapshot), `createInvestigation`, `sendMessage`, `simulationNext`, `ingestMessages`, `generateHash`, `verifyEvidence`, `setEvidenceContent` / `setEvidenceNotes`, `setRunStatus`, `completeInvestigation`, `resetCase`, `generateReport`, `seedDemo`, `updateSettings`, and more.
 - `src/convex/lib/backend.ts` — the shared pipeline: tactic detection, kill-chain progression, identifier extraction (UPI/VPA, phone, payment amount, link, IP, email), server-side SHA-256 hashing, activity events and log entries. Original message content is never mutated.
-- `src/convex/ai.ts` — Anthropic Claude calls (`"use node"` action) for investigation strategy and report summaries.
+- `src/convex/ai.ts` — Groq LLM calls (`"use node"` action) for investigation strategy and report summaries. All AI features share the transport in `src/convex/groqClient.ts`; the legacy `anthropicClient.ts` is retained but no longer called.
 - `src/convex/actions.ts` — action wrappers (`sendMessageWithAI`, `simulationNextWithAI`, `generateReportWithAI`, `approveStrategyWithAI`) that try the LLM first and fall back to the deterministic simulation engine, labelled `SIMULATION` in logs and in the UI.
 - `src/state/JaalProvider.tsx` — hydrates the frontend from `api.jaal.state` via `useQuery` and routes every command through mutations/actions. A local reducer remains only as an offline fallback.
 
@@ -258,8 +258,10 @@ create → message (operator or simulated) → analysis (tactics + intent + stra
 
 ## Engine modes
 
-- **ANTHROPIC** — set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`, default `claude-sonnet-4-5`) on the Convex deployment: `npx convex env set ANTHROPIC_API_KEY sk-ant-...`. Strategy and report actions then call Claude; the workspace labels the engine "Convex action — Anthropic Claude".
+- **GROQ** — set `GROQ_API_KEY` (and optionally `GROQ_MODEL`, default `openai/gpt-oss-120b`) on the Convex deployment: `npx convex env set GROQ_API_KEY gsk_...`. Strategy, summary, intelligence modules, copilot, safety assistant, consumer content analysis and voice analysis all call Groq over its OpenAI-compatible chat API; the UI labels the engine "GROQ". Rows written before the migration keep their legacy `ANTHROPIC` label and still display as AI-assisted.
 - **SIMULATION** (default, no key required) — every action falls back to the deterministic rules engine and the UI is clearly labelled "Simulation mode — analysis engine".
+
+Every Groq call keeps its original contract: hard per-attempt timeout, one retry on transient statuses only, errors reduced to the HTTP status (never the key or provider body), per-owner AI budget, and server-side zod validation before any output is stored.
 
 ## Recorded-call transcription (Groq Cloud)
 
@@ -277,6 +279,20 @@ To verify a deployment without uploading a recording, run
 public-domain speech sample through the same upload path and reports the
 provider, whether authentication passed, and how many reference words were
 recognised. It never returns the key or the provider's raw response.
+
+A non-empty transcript is not treated as proof of speech. When every segment's
+`no_speech_prob` is high **and** its `avg_logprob` is poor, when the WAV is
+shorter than 250 ms, or when a PCM WAV contains digital silence (no signal at
+all) — the recording is stored as `NO_SPEECH` and no transcript or analysis is
+produced. The signal-level check exists because Groq's turbo model has been
+observed returning `no_speech_prob: 0` for a silent file while hallucinating
+"Thank you.". Missing metadata never counts as silence, and quiet speech that
+decodes confidently is kept.
+
+To verify every AI workflow against Groq without touching case data, run
+`npx convex run aiSmoke:run`. It sends one synthetic, non-sensitive example
+through each production prompt and schema and reports only whether the provider
+answered and whether the output validated.
 
 Convex-side keys are never exposed to the browser bundle.
 
@@ -337,10 +353,11 @@ before treating any JAAL output as authoritative.
   commands found in it, control characters are stripped, and outputs are
   zod-validated. This is a **best-effort defense, not a guarantee** — a
   sufficiently adversarial transcript may still influence model output.
-  AI results are always labelled (ANTHROPIC vs SIMULATION engine) and
-  AI-assisted content is separated from rule-based findings in reports.
-- The Anthropic key lives only in Convex environment variables
-  (`ANTHROPIC_API_KEY`); it is never sent to the browser or logged.
+  AI results are always labelled (GROQ vs SIMULATION engine; legacy rows may
+  read ANTHROPIC) and AI-assisted content is separated from rule-based
+  findings in reports.
+- The Groq key lives only in Convex environment variables (`GROQ_API_KEY`);
+  it is never sent to the browser or logged.
 
 **Detection honesty**
 
@@ -394,7 +411,7 @@ equivalent of the REST surface (REST-style paths in parentheses).
 
 | Function | Purpose |
 | --- | --- |
-| `actions.sendMessageWithAI` | Tries Claude for strategy/reply context, falls back to the simulation engine (labeled). |
+| `actions.sendMessageWithAI` | Tries Groq for strategy/reply context, falls back to the simulation engine (labeled). |
 | `actions.simulationNextWithAI` | Same for arc advancement. |
 | `actions.approveStrategyWithAI` | Sends the approved (possibly edited) decoy question through the pipeline. |
 | `actions.generateReportWithAI` | LLM report summary when configured, deterministic otherwise. |

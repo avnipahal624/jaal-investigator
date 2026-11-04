@@ -1,4 +1,5 @@
 import { TACTIC_META } from "@/services/investigationService";
+import { isAiEngine } from "@/theme/status";
 import { buildCaseSummary, buildUnknowns } from "@/services/summaryService";
 import type { CaseRuntime, Investigation } from "@/types/investigation";
 import type { EvidenceReport } from "@/types/report";
@@ -36,7 +37,7 @@ export function buildReport(
   });
 
   // ---- Provenance: keep finding classes explicitly separated --------------
-  const strategyIsAi = runtime.strategy?.source === "ANTHROPIC";
+  const strategyIsAi = isAiEngine(runtime.strategy?.source);
   const reviewed = runtime.evidence.filter(
     (e) => e.reviewStatus === "confirmed" || e.reviewStatus === "incorrect",
   );
@@ -52,7 +53,7 @@ export function buildReport(
         : "Investigation strategy — deterministic rule engine over the conversation state.",
     ],
     aiAssisted: strategyIsAi
-      ? ["Investigation strategy suggestion — Anthropic Claude (validated structured output)."]
+      ? ["Investigation strategy suggestion — Groq LLM (validated structured output)."]
       : [],
     humanReviewed: reviewed.length
       ? reviewed.map(

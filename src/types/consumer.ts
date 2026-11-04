@@ -151,7 +151,9 @@ export type VoiceProcessStatus =
   | "PROCESSING"
   | "COMPLETED"
   | "FAILED"
-  | "UNAVAILABLE";
+  | "UNAVAILABLE"
+  /** Transcription found no speech in the audio (positive evidence). */
+  | "NO_SPEECH";
 
 export interface VoiceSegment {
   speaker?: string;

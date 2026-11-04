@@ -44,7 +44,7 @@ const nextId = () => `m-${Date.now()}-${idCounter++}`;
  * JAAL Safety Assistant — floating chat on the consumer dashboard.
  *
  * Real AI backend: each turn calls the `assistantActions.safetyChatAction`
- * Convex action (Node runtime, Anthropic). There is no scripted fallback — if
+ * Convex action (Node runtime, Groq). There is no scripted fallback — if
  * the provider is unavailable the panel says so honestly and offers a retry.
  */
 export default function Assistant() {

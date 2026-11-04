@@ -1,5 +1,5 @@
 import { Chip, RUN_STATUS_STYLE, STAGE_STATUS_STYLE } from "@/components/ui/panel";
-import { statusStyle } from "@/theme/status";
+import { isAiEngine, statusStyle } from "@/theme/status";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -86,12 +86,12 @@ export function WorkspaceHeader({
               <span className="border border-jborder/60 px-1.5 py-px font-mono text-[9px] uppercase tracking-wider text-jmuted">
                 {investigation.category}
               </span>
-              {runtime.strategy?.source === "ANTHROPIC" ? (
+              {isAiEngine(runtime.strategy?.source) ? (
                 <span
                   className="flex items-center gap-1 border px-1.5 py-px font-mono text-[9px] uppercase tracking-wider"
                   style={statusStyle("engine", "claude")}
                 >
-                  <Radio className="size-2.5" /> claude / live ai
+                  <Radio className="size-2.5" /> groq / live ai
                 </span>
               ) : (
                 <span

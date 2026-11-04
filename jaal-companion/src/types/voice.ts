@@ -12,7 +12,9 @@ export type TranscriptionStatus =
   | "PROCESSING"
   | "COMPLETED"
   | "FAILED"
-  | "UNAVAILABLE";
+  | "UNAVAILABLE"
+  /** Audio was analysed and found to contain no speech. */
+  | "NO_SPEECH";
 
 export type AnalysisStatus = TranscriptionStatus;
 

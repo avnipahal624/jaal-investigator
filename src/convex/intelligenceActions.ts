@@ -7,7 +7,7 @@
  *
  *   caseContext (ownership) → per-owner rate limit → beginAnalysis (slot +
  *   cache) → [deterministic pre-pass where applicable] → bounded prompt →
- *   Anthropic call → strict zod validation → grounding against the case's
+ *   Groq call → strict zod validation → grounding against the case's
  *   alias index → saveAnalysis (stored SEPARATELY from messages/evidence).
  *
  * Failure at any step is recorded as a failure CATEGORY (never raw provider
@@ -16,20 +16,15 @@
  * output — only the correlation module's deterministic rule pass produces
  * results without the provider, and those are labelled RULE_BASED.
  *
- * Secrets (ANTHROPIC_API_KEY / ANTHROPIC_MODEL) are read only here.
+ * Secrets (GROQ_API_KEY / GROQ_MODEL) are read only here.
  */
 import { action } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { z } from "zod";
 import { api, internal } from "./_generated/api";
-import {
-  authorizeAiCall,
-  callClaude,
-  currentModel,
-  extractJson,
-  sanitize,
-} from "./ai";
+import { authorizeAiCall, extractJson, sanitize } from "./ai";
+import { callGroq, currentGroqModel } from "./groqClient";
 import {
   MODULE_SCHEMA_VERSION,
   SECURITY_PREAMBLE,
@@ -115,7 +110,7 @@ function categorize(err: unknown): ErrorCategory {
     if (err.name === "TimeoutError" || err.name === "AbortError") return "timeout";
     const msg = err.message;
     if (/429|rate limit/i.test(msg)) return "rate-limited";
-    if (/^Anthropic API \d/.test(msg)) return "provider-error";
+    if (/^(?:Groq|Anthropic) API \d/.test(msg)) return "provider-error";
     if (/fetch|network|ENOTFOUND|ECONN/i.test(msg)) return "provider-error";
   }
   return "unknown";
@@ -230,11 +225,11 @@ async function runModule<T>(opts: {
   }
 
   // 5. Provider availability.
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     await save("UNAVAILABLE", {
       error: "no-api-key",
-      limitations: ["AI provider not configured on this deployment (ANTHROPIC_API_KEY missing)."],
+      limitations: ["AI provider not configured on this deployment (GROQ_API_KEY missing)."],
     });
     return { status: "UNAVAILABLE", reused: false, error: "no-api-key", count: 0, durationMs: Date.now() - started };
   }
@@ -252,7 +247,9 @@ async function runModule<T>(opts: {
       evidence: caseCtx.evidence,
       tactics: caseCtx.tactics,
     });
-    const text = await callClaude(apiKey, opts.system, userContent, opts.maxTokens);
+    const text = await callGroq(apiKey, opts.system, userContent, opts.maxTokens, {
+      json: true,
+    });
     if (!text) {
       await save("FAILED", { error: "malformed-output" });
       return { status: "FAILED", reused: false, error: "malformed-output", count: 0, durationMs: Date.now() - started };
@@ -280,8 +277,8 @@ async function runModule<T>(opts: {
     await save("COMPLETED", {
       output: grounded.output,
       limitations,
-      provider: "ANTHROPIC",
-      model: currentModel(),
+      provider: "GROQ",
+      model: currentGroqModel(),
     });
     if (opts.onCompleted) await opts.onCompleted(grounded.output, caseCtx);
     return {
@@ -302,7 +299,7 @@ async function runModule<T>(opts: {
 // Module 1 — Threat Intelligence Analyst
 // ---------------------------------------------------------------------------
 
-const THREAT_SYSTEM = `You are the Threat Intelligence Analyst for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You interpret conversational context to identify manipulative behaviour, scam patterns and potential threats. A deterministic rule engine runs separately — you complement it with context, you do not merely repeat it.
+export const THREAT_SYSTEM = `You are the Threat Intelligence Analyst for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You interpret conversational context to identify manipulative behaviour, scam patterns and potential threats. A deterministic rule engine runs separately — you complement it with context, you do not merely repeat it.
 
 ${SECURITY_PREAMBLE}
 
@@ -352,7 +349,7 @@ export const threatAnalysisAction = action({
 // Module 2 — Intent & Behaviour Prediction
 // ---------------------------------------------------------------------------
 
-const PREDICTION_SYSTEM = `You are the Intent & Behaviour Prediction Engine for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You estimate plausible next actions from the conversation's CURRENT state — predictive assistance, never certainty.
+export const PREDICTION_SYSTEM = `You are the Intent & Behaviour Prediction Engine for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You estimate plausible next actions from the conversation's CURRENT state — predictive assistance, never certainty.
 
 ${SECURITY_PREAMBLE}
 
@@ -402,7 +399,7 @@ export const predictionAction = action({
 // Module 4 — Evidence Correlation (deterministic pre-pass + AI context pass)
 // ---------------------------------------------------------------------------
 
-const CORRELATION_SYSTEM = `You are the Evidence Correlation Engine for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You suggest POTENTIAL relationships between entities in <case_data> for a human investigator to review.
+export const CORRELATION_SYSTEM = `You are the Evidence Correlation Engine for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You suggest POTENTIAL relationships between entities in <case_data> for a human investigator to review.
 
 ${SECURITY_PREAMBLE}
 
@@ -473,7 +470,7 @@ export const correlationSuggestAction = action({
 // Module 5 — Forensic Report Assistant
 // ---------------------------------------------------------------------------
 
-const REPORT_SYSTEM = `You are the Forensic Report Assistant for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You write narrative report sections grounded STRICTLY in <case_data>. You organise and explain — you never invent facts.
+export const REPORT_SYSTEM = `You are the Forensic Report Assistant for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You write narrative report sections grounded STRICTLY in <case_data>. You organise and explain — you never invent facts.
 
 ${SECURITY_PREAMBLE}
 
@@ -526,7 +523,7 @@ export const reportAssistAction = action({
 // Module 3 — Investigation Copilot (read-only Q&A)
 // ---------------------------------------------------------------------------
 
-const COPILOT_SYSTEM = `You are the Investigation Copilot for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You answer an investigator's questions about ONE case using only the <case_data> block provided.
+export const COPILOT_SYSTEM = `You are the Investigation Copilot for JAAL, a scam-analysis training platform running a CONTROLLED SIMULATION. You answer an investigator's questions about ONE case using only the <case_data> block provided.
 
 ${SECURITY_PREAMBLE}
 
@@ -595,7 +592,7 @@ export const copilotAskAction = action({
       return { status, error } as const;
     };
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) return finish("UNAVAILABLE", "no-api-key");
 
     try {
@@ -615,7 +612,9 @@ export const copilotAskAction = action({
         `\n<question>\n${question}\n</question>`,
       ].join("\n");
 
-      const text = await callClaude(apiKey, COPILOT_SYSTEM, userContent, 1_400);
+      const text = await callGroq(apiKey, COPILOT_SYSTEM, userContent, 1_400, {
+        json: true,
+      });
       if (!text) return finish("FAILED", "malformed-output");
       const parsed = COPILOT_OUTPUT_SCHEMA.safeParse(
         extractJson(sanitize(text, 32_000)),

@@ -187,6 +187,8 @@ describe("raw value normalization", () => {
   it("normalizes review and engine values", () => {
     expect(reviewKey("needs_review")).toBe("needsreview");
     expect(reviewKey(null)).toBeNull();
+    expect(engineKey("GROQ")).toBe("claude");
+    // Legacy rows written before the provider migration still render as AI.
     expect(engineKey("ANTHROPIC")).toBe("claude");
     expect(engineKey("SIMULATION")).toBe("simulation");
     expect(engineKey("anything")).toBe("simulation");

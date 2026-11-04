@@ -327,7 +327,9 @@ function VoiceIntakeDetailConsumer({ recordingId }: { recordingId: Id<"voice_rec
               )
             ) : (
               <p className="text-sm text-jmuted">
-                No transcript available ({detailData.transcription.status.toLowerCase()}).
+                {detailData.transcription.status === "NO_SPEECH"
+                  ? "No speech detected in this recording."
+                  : `No transcript available (${detailData.transcription.status.toLowerCase()}).`}
               </p>
             )}
           </section>
@@ -675,7 +677,9 @@ function VoiceIntakeDetailInvestigator({
               )
             ) : (
               <p className="text-sm text-jmuted">
-                No transcript available ({detailData.transcription.status.toLowerCase()}).
+                {detailData.transcription.status === "NO_SPEECH"
+                  ? "No speech detected in this recording."
+                  : `No transcript available (${detailData.transcription.status.toLowerCase()}).`}
               </p>
             )}
           </section>

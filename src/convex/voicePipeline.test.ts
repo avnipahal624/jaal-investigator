@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_STT_ENDPOINT,
+  NoSpeechError,
   TIMESTAMP_TOLERANCE_MS,
+  assessSpeech,
   buildTranscriptBlock,
   describeSttError,
   groundFindings,
@@ -10,6 +12,8 @@ import {
   resolveSttConfig,
   sttTranscriptionUrl,
   transcribeAudio,
+  wavDurationMs,
+  wavSignal,
   type FetchLike,
   type SttConfig,
 } from "./voicePipeline";
@@ -564,5 +568,313 @@ describe("groundIndicators", () => {
       transcript,
     );
     expect(indicators[0].context).toBe("pay to scam@upi");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Silence detection (provider metadata + validated audio characteristics)
+// ---------------------------------------------------------------------------
+
+function wavBytes(
+  durationMs: number,
+  sampleRate = 16_000,
+  amplitude = 0,
+): Uint8Array {
+  const dataBytes = Math.round((durationMs / 1000) * sampleRate * 2);
+  const buffer = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(buffer);
+  const ascii = (offset: number, text: string) => {
+    for (let i = 0; i < text.length; i += 1) {
+      view.setUint8(offset + i, text.charCodeAt(i));
+    }
+  };
+  ascii(0, "RIFF");
+  view.setUint32(4, 36 + dataBytes, true);
+  ascii(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ascii(36, "data");
+  view.setUint32(40, dataBytes, true);
+  if (amplitude > 0) {
+    for (let i = 0; i < dataBytes / 2; i += 1) {
+      view.setInt16(
+        44 + i * 2,
+        Math.round(Math.sin(i / 8) * amplitude * 32_767),
+        true,
+      );
+    }
+  }
+  return new Uint8Array(buffer);
+}
+
+describe("parseSttResponse speech metadata", () => {
+  it("keeps provider no-speech probability and decode confidence", () => {
+    const result = parseSttResponse({
+      segments: [
+        {
+          start: 0,
+          end: 2,
+          text: "Thank you.",
+          no_speech_prob: 0.93,
+          avg_logprob: -1.6,
+          compression_ratio: 0.8,
+        },
+      ],
+    });
+    expect(result.segments?.[0].noSpeechProb).toBe(0.93);
+    expect(result.segments?.[0].avgLogprob).toBe(-1.6);
+    expect(result.segments?.[0].compressionRatio).toBe(0.8);
+  });
+
+  it("clamps an out-of-range probability and ignores non-numeric values", () => {
+    const result = parseSttResponse({
+      segments: [
+        { start: 0, text: "a", no_speech_prob: 1.7, avg_logprob: "bad" },
+        { start: 1, text: "b", no_speech_prob: -2 },
+      ],
+    });
+    expect(result.segments?.[0].noSpeechProb).toBe(1);
+    expect(result.segments?.[0].avgLogprob).toBeUndefined();
+    expect(result.segments?.[1].noSpeechProb).toBe(0);
+  });
+});
+
+describe("assessSpeech", () => {
+  it("reports no speech for high no-speech probability and poor confidence", () => {
+    const assessment = assessSpeech({
+      segments: [
+        { text: "Thank you.", noSpeechProb: 0.94, avgLogprob: -1.7 },
+        { text: "Thanks for watching.", noSpeechProb: 0.9, avgLogprob: -1.4 },
+      ],
+    });
+    expect(assessment.speechDetected).toBe(false);
+    expect(assessment.confident).toBe(true);
+    expect(assessment.reason).toBe("no-speech");
+    expect(assessment.detail).toBe("provider-metadata");
+    expect(assessment.meanNoSpeechProb).toBe(0.92);
+  });
+
+  it("keeps background noise that the provider decoded confidently", () => {
+    const assessment = assessSpeech({
+      segments: [{ text: "hello?", noSpeechProb: 0.45, avgLogprob: -0.6 }],
+    });
+    expect(assessment.speechDetected).toBe(true);
+    expect(assessment.confident).toBe(true);
+    expect(assessment.reason).toBe("speech");
+  });
+
+  it("does not reject quiet but genuine speech", () => {
+    // Low amplitude can raise no_speech_prob, but confident decoding (high
+    // avg_logprob) must win so a soft-spoken caller is still transcribed.
+    const assessment = assessSpeech({
+      segments: [{ text: "my account is blocked", noSpeechProb: 0.72, avgLogprob: -0.32 }],
+    });
+    expect(assessment.speechDetected).toBe(true);
+  });
+
+  it("treats missing metadata as unconfirmed, never as silence", () => {
+    const assessment = assessSpeech({
+      segments: [{ text: "some transcript" }],
+    });
+    expect(assessment.speechDetected).toBe(true);
+    expect(assessment.confident).toBe(false);
+    expect(assessment.reason).toBe("insufficient-metadata");
+    expect(assessment.meanNoSpeechProb).toBeNull();
+  });
+
+  it("has no verdict when the provider returned no segments", () => {
+    const assessment = assessSpeech({ segments: undefined });
+    expect(assessment.speechDetected).toBe(true);
+    expect(assessment.confident).toBe(false);
+  });
+
+  it("rejects audio too short to contain a word", () => {
+    const assessment = assessSpeech({ segments: null, durationMs: 120 });
+    expect(assessment.speechDetected).toBe(false);
+    expect(assessment.detail).toBe("audio-too-short");
+  });
+
+  it("only needs one confidently decoded segment to keep the audio", () => {
+    const assessment = assessSpeech({
+      segments: [
+        { text: "hmm", noSpeechProb: 0.95, avgLogprob: -1.9 },
+        { text: "call from the bank", noSpeechProb: 0.2, avgLogprob: -0.4 },
+      ],
+    });
+    expect(assessment.speechDetected).toBe(true);
+  });
+});
+
+describe("wavDurationMs", () => {
+  it("reads the duration of a PCM WAV from its headers", () => {
+    expect(wavDurationMs(wavBytes(2_000))).toBe(2_000);
+  });
+
+  it("returns null for non-WAV or truncated bytes", () => {
+    expect(wavDurationMs(new Uint8Array([1, 2, 3]))).toBeNull();
+    const junk = new Uint8Array(64);
+    expect(wavDurationMs(junk)).toBeNull();
+  });
+});
+
+describe("transcribeAudio silence handling", () => {
+  // Audible audio, so the provider-metadata rules are what decide here.
+  const bytes = wavBytes(3_000, 16_000, 0.2);
+
+  const sttConfig = () => resolveSttConfig({ GROQ_API_KEY: "gsk_test" });
+
+  function configuredStt(): Extract<SttConfig, { configured: true }> {
+    const config = sttConfig();
+    if (!config.configured) throw new Error("test config not configured");
+    return config;
+  }
+
+  it("rejects a silent recording even when the provider hallucinates words", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        text: "Thank you.",
+        language: "en",
+        segments: [
+          { start: 0, end: 3, text: "Thank you.", no_speech_prob: 0.96, avg_logprob: -1.8 },
+        ],
+      }),
+    ) as unknown as FetchLike;
+
+    const err = await transcribeAudio({
+      config: configuredStt(),
+      bytes,
+      mimeType: "audio/wav",
+      fetchImpl,
+    }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(NoSpeechError);
+    expect(err instanceof NoSpeechError && err.assessment.detail).toBe("provider-metadata");
+  });
+
+  it("accepts real speech with confident metadata", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        text: "my account is blocked",
+        segments: [
+          {
+            start: 0,
+            end: 3,
+            text: "my account is blocked",
+            no_speech_prob: 0.12,
+            avg_logprob: -0.3,
+          },
+        ],
+      }),
+    ) as unknown as FetchLike;
+
+    const result = await transcribeAudio({
+      config: configuredStt(),
+      bytes,
+      mimeType: "audio/wav",
+      fetchImpl,
+    });
+    expect(result.text).toBe("my account is blocked");
+    expect(result.speech?.reason).toBe("speech");
+  });
+
+  it("keeps a transcript when the provider sends no metadata", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ text: "words", segments: [{ start: 0, text: "words" }] }),
+    ) as unknown as FetchLike;
+
+    const result = await transcribeAudio({
+      config: configuredStt(),
+      bytes,
+      mimeType: "audio/wav",
+      fetchImpl,
+    });
+    expect(result.speech?.confident).toBe(false);
+    expect(result.text).toBe("words");
+  });
+
+  it("still surfaces provider errors instead of calling them silence", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response("unauthorized", { status: 401 }),
+    ) as unknown as FetchLike;
+
+    const err = await transcribeAudio({
+      config: configuredStt(),
+      bytes,
+      mimeType: "audio/wav",
+      fetchImpl,
+    }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(NoSpeechError);
+    expect(describeSttError(err)).toBe("stt-http-401");
+  });
+});
+
+describe("wavSignal + digital silence", () => {
+  it("measures duration and level of a PCM WAV", () => {
+    const loud = wavSignal(wavBytes(1_500, 16_000, 0.5));
+    expect(loud?.durationMs).toBe(1_500);
+    expect(loud!.peak).toBeGreaterThan(0.4);
+    expect(loud!.rms).toBeGreaterThan(0.1);
+  });
+
+  it("reports zero level for a digitally silent file", () => {
+    const silent = wavSignal(wavBytes(1_000));
+    expect(silent?.peak).toBe(0);
+    expect(silent?.rms).toBe(0);
+  });
+
+  it("returns null for audio it cannot measure", () => {
+    expect(wavSignal(new Uint8Array(10))).toBeNull();
+    expect(wavSignal(new Uint8Array(64))).toBeNull();
+  });
+
+  it("treats digital silence as no speech even when metadata disagrees", () => {
+    const assessment = assessSpeech({
+      segments: [{ text: "Thank you.", noSpeechProb: 0, avgLogprob: -0.29 }],
+      durationMs: 1_000,
+      signal: { peak: 0 },
+    });
+    expect(assessment.speechDetected).toBe(false);
+    expect(assessment.detail).toBe("digital-silence");
+  });
+
+  it("keeps quiet but real signal", () => {
+    const signal = wavSignal(wavBytes(1_000, 16_000, 0.01));
+    const assessment = assessSpeech({
+      segments: [{ text: "hello", noSpeechProb: 0.2, avgLogprob: -0.4 }],
+      durationMs: signal?.durationMs,
+      signal,
+    });
+    expect(assessment.speechDetected).toBe(true);
+  });
+
+  it("rejects a silent upload the provider wrongly transcribed", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        text: "Thank you.",
+        segments: [
+          { start: 0, end: 1, text: "Thank you.", no_speech_prob: 0, avg_logprob: -0.29 },
+        ],
+      }),
+    ) as unknown as FetchLike;
+
+    const config = resolveSttConfig({ GROQ_API_KEY: "gsk_test" });
+    if (!config.configured) throw new Error("test config not configured");
+
+    const err = await transcribeAudio({
+      config,
+      bytes: wavBytes(1_000),
+      mimeType: "audio/wav",
+      fetchImpl,
+    }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(NoSpeechError);
+    expect(err instanceof NoSpeechError && err.assessment.detail).toBe("digital-silence");
   });
 });

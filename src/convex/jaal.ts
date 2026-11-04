@@ -900,7 +900,7 @@ export const applyStrategyOverride = mutation({
       suggestedQuestion: override.suggestedQuestion,
       reason: override.reason,
       relatedMessageIds: lastScammer ? [lastScammer._id] : [],
-      engineMode: "ANTHROPIC",
+      engineMode: "GROQ",
       status: "pending",
       createdAt: Date.now(),
     });
@@ -908,7 +908,7 @@ export const applyStrategyOverride = mutation({
       ctx.db,
       inv,
       "info",
-      `AI analysis: strategy generated (ANTHROPIC) → “${override.suggestedQuestion}”`,
+      `AI analysis: strategy generated (GROQ) → “${override.suggestedQuestion}”`,
     );
     return { applied: true };
   },
@@ -1598,9 +1598,11 @@ export const applyReportSummary = mutation({
     if (!doc) return;
     const data = doc.reportData as EvidenceReport;
     const aiSummary =
-      engineMode === "ANTHROPIC"
-        ? "Executive summary narrative — Anthropic Claude."
-        : `Executive summary narrative — ${engineMode}.`;
+      engineMode === "GROQ"
+        ? "Executive summary narrative — Groq LLM."
+        : engineMode === "ANTHROPIC"
+          ? "Executive summary narrative — Anthropic Claude (legacy record)."
+          : `Executive summary narrative — ${engineMode}.`;
     const provenance = data.provenance
       ? {
           ...data.provenance,

@@ -317,19 +317,19 @@ describe("investigation strategy", () => {
     );
   });
 
-  it("prefers a backend (Claude-labeled) strategy override when present", () => {
+  it("prefers a backend (Groq-labeled) strategy override when present", () => {
     const rt = runtimeWith([]);
     rt.strategy = {
       objective: "Pin the claimed unit",
       missing: "The inspector's name",
       question: "What is your name and batch number?",
       reason: "Named authority claims are checkable.",
-      source: "ANTHROPIC",
+      source: "GROQ",
       approved: false,
     };
     const strategy = buildStrategy(rt)!;
     expect(strategy.question).toContain("batch number");
-    expect(strategy.source).toBe("ANTHROPIC");
+    expect(strategy.source).toBe("GROQ");
   });
 
   it("classifies intent from tactics without inventing confidence", () => {

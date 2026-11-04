@@ -4,9 +4,9 @@
  * JAAL SAFETY ASSISTANT — consumer chat action.
  *
  * A single Node-runtime action powers the "Ask JAAL" chat panel on the
- * consumer dashboard. It reuses the same Anthropic provider (`callClaude`),
- * secret handling, size caps and per-owner AI budget as the investigation
- * modules. No new provider, no new table, no client-side secrets.
+ * consumer dashboard. It reuses the same Groq provider (`callGroq`), secret
+ * handling, size caps and per-owner AI budget as the investigation modules.
+ * No separate provider, no new table, no client-side secrets.
  *
  * Security / safety properties:
  *  - Authentication is mandatory (server-validated Convex Auth identity via
@@ -24,14 +24,15 @@
  *    `consumer.consumerReports` query, so the assistant can only ever see the
  *    authenticated user's consumer-safe fields — never investigator-only
  *    notes, other users' data, or internal correlations.
- *  - If ANTHROPIC_API_KEY is not configured, the action returns an honest
+ *  - If GROQ_API_KEY is not configured, the action returns an honest
  *    UNAVAILABLE status. No scripted fallback is ever presented as AI.
  */
 import { action } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { callClaude, extractJson, sanitize } from "./ai";
+import { extractJson, sanitize } from "./ai";
+import { callGroq } from "./groqClient";
 import { getOwner } from "./lib/backend";
 import { SECURITY_PREAMBLE } from "./lib/intelligence";
 
@@ -59,7 +60,7 @@ const MAX_REPORTS = 8;
  * Safety-assistant system prompt. Plain-language, reassuring, honest about
  * uncertainty, and strict about never fabricating authority or recovery.
  */
-const SAFETY_SYSTEM = `You are the JAAL Safety Assistant, a digital-safety companion built into JAAL for everyday people in India. You help ordinary users understand suspicious messages, calls, payment requests and links, and what to do next. You are supportive, calm and practical.
+export const SAFETY_SYSTEM = `You are the JAAL Safety Assistant, a digital-safety companion built into JAAL for everyday people in India. You help ordinary users understand suspicious messages, calls, payment requests and links, and what to do next. You are supportive, calm and practical.
 
 HOW TO RESPOND:
 - Use plain, non-technical language, short paragraphs and clear action steps.
@@ -183,7 +184,7 @@ export const safetyChatAction = action({
     }
 
     // 4. Provider availability — honest UNAVAILABLE, never a scripted fallback.
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
       return {
         status: "UNAVAILABLE",
@@ -208,7 +209,7 @@ export const safetyChatAction = action({
         buildConversationBlock(history, question),
       ].join("\n\n");
 
-      const text = await callClaude(apiKey, SAFETY_SYSTEM, userContent, 1_200);
+      const text = await callGroq(apiKey, SAFETY_SYSTEM, userContent, 1_200);
       if (!text) {
         return {
           status: "FAILED",
@@ -262,7 +263,7 @@ const MAX_ANALYSIS_CHARS = 6_000;
  * content supplied, forbids fabricating authority/recovery/helplines, refuses
  * to claim a link was opened, and never emits an overall numeric risk score.
  */
-const ANALYSIS_SYSTEM = `You are the JAAL content analyst for everyday people in India. You are given ONE piece of content the user found suspicious (a message, or a link/URL). Analyse the ACTUAL content supplied — never give a generic answer when specific content is present. Be supportive, calm and practical.
+export const ANALYSIS_SYSTEM = `You are the JAAL content analyst for everyday people in India. You are given ONE piece of content the user found suspicious (a message, or a link/URL). Analyse the ACTUAL content supplied — never give a generic answer when specific content is present. Be supportive, calm and practical.
 
 ${SECURITY_PREAMBLE}
 
@@ -328,10 +329,10 @@ function pickStrings(v: unknown, max: number, limit: number): string[] {
  * Analyse one piece of consumer content (a pasted message or a link) and
  * return a structured, traceable assessment.
  *
- * Reuses the existing Anthropic provider (`callClaude`), secret handling, size
- * caps and per-owner AI budget (`recordAssistantRequest`). No new provider, no
- * new table, no client-side secrets, no overall numeric risk score. If
- * ANTHROPIC_API_KEY is not configured it returns an honest UNAVAILABLE status.
+ * Reuses the shared Groq provider (`callGroq`), secret handling, size caps and
+ * per-owner AI budget (`recordAssistantRequest`). No separate provider, no new
+ * table, no client-side secrets, no overall numeric risk score. If
+ * GROQ_API_KEY is not configured it returns an honest UNAVAILABLE status.
  */
 export const analyseConsumerContent = action({
   args: {
@@ -378,7 +379,7 @@ export const analyseConsumerContent = action({
     }
 
     // 3. Provider availability — honest UNAVAILABLE, never a scripted result.
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
       return {
         status: "UNAVAILABLE",
@@ -397,7 +398,9 @@ export const analyseConsumerContent = action({
     // 4. Analyse the ACTUAL content under the security preamble.
     try {
       const userContent = `<content kind="${args.kind}">\n${content}\n</content>`;
-      const text = await callClaude(apiKey, ANALYSIS_SYSTEM, userContent, 1_600);
+      const text = await callGroq(apiKey, ANALYSIS_SYSTEM, userContent, 1_600, {
+        json: true,
+      });
       if (!text) {
         return {
           status: "FAILED",

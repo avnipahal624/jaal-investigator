@@ -209,7 +209,9 @@ export default function ConsumerVoiceResultPage() {
         {(analysis.status === "UNAVAILABLE" || analysis.status === "FAILED") && (
           <div className="mt-4 rounded-xl border border-[var(--color-consumer-border)] bg-[var(--color-consumer-glass)] p-4">
             <p className="text-sm text-[var(--color-consumer-text)] leading-relaxed">
-              {analysis.error === "no-transcript" || analysis.error === "no-provider"
+              {analysis.error === "no-speech"
+                ? "No speech was detected in this recording, so there was nothing to analyse. If the call did contain speech, add what was said below and analyse that instead."
+                : analysis.error === "no-transcript" || analysis.error === "no-provider"
                 ? "No automatic speech-to-text is configured on this deployment, and no written notes were provided — so the audio could not be analysed. You can add what was said below and analyse that instead."
                 : analysis.status === "FAILED"
                 ? "The analysis could not be completed this time. Nothing was invented. You can retry, or add what was said to analyse that instead."

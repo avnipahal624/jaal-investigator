@@ -140,6 +140,7 @@ const INV_KEY: Record<string, keyof (typeof STATUS_SCREEN)["inv"]> = {
 };
 
 const ENGINE_KEY: Record<string, keyof (typeof STATUS_SCREEN)["engine"]> = {
+  GROQ: "claude",
   ANTHROPIC: "claude",
   claude: "claude",
   SIMULATION: "simulation",
@@ -160,6 +161,17 @@ export function invKey(raw: string): keyof (typeof STATUS_SCREEN)["inv"] {
 }
 export function engineKey(raw: string): keyof (typeof STATUS_SCREEN)["engine"] {
   return ENGINE_KEY[raw] ?? "simulation";
+}
+
+/**
+ * True when a strategy/summary came from a model rather than the rules engine.
+ * `GROQ` is the current label; `ANTHROPIC` is accepted only so records written
+ * before the provider migration still display as AI-assisted.
+ */
+export function isAiEngine(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  const key = raw.trim().toUpperCase();
+  return key === "GROQ" || key === "ANTHROPIC" || key === "CLAUDE";
 }
 /** Kill-chain stage status → config key (identity, with a safe fallback). */
 export function stageStatusKey(

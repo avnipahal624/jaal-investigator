@@ -6,12 +6,12 @@
  * Convex mutations cannot call actions, so the LLM steps live here: each
  * action runs the deterministic mutation first (message persistence, tactic
  * analysis, evidence extraction, SHA-256 hashing, kill-chain, rule-based
- * strategy), then attempts the Anthropic provider and supersedes the pending
+ * strategy), then attempts the Groq provider and supersedes the pending
  * strategy with a model suggestion when one is available. On any failure the
  * deterministic result stands and the fallback is recorded in the logs.
  *
- * Secrets (ANTHROPIC_API_KEY, ANTHROPIC_MODEL) are read only in this Node
- * runtime and never exposed to the browser.
+ * Secrets (GROQ_API_KEY, GROQ_MODEL) are read only in the Node runtime and
+ * never exposed to the browser.
  */
 import { action } from "./_generated/server";
 import { v } from "convex/values";

@@ -123,7 +123,11 @@ function wordAgreement(transcript: string, reference: string) {
 }
 
 export const check = internalAction({
-  args: { allowSpeechSample: v.optional(v.boolean()) },
+  args: {
+    allowSpeechSample: v.optional(v.boolean()),
+    /** Send 1s of silence to verify the no-speech guard against the provider. */
+    forceSilence: v.optional(v.boolean()),
+  },
   handler: async (_ctx, args) => {
     const stt = resolveSttConfig(process.env);
     const env = {
@@ -147,7 +151,9 @@ export const check = internalAction({
     })();
 
     let attempt: SpeechAttempt | null = null;
-    if (args.allowSpeechSample !== false) attempt = await fetchSampleSpeech();
+    if (args.allowSpeechSample !== false && args.forceSilence !== true) {
+      attempt = await fetchSampleSpeech();
+    }
 
     const audio = attempt?.ok
       ? { bytes: attempt.bytes, mimeType: attempt.mimeType }
@@ -192,6 +198,7 @@ export const check = internalAction({
           ),
           referenceWordMatches: agreement?.matched ?? null,
           referenceWordTotal: agreement?.total ?? null,
+          speechAssessment: result.speech ?? null,
           latencyMs: Date.now() - startedAt,
         },
       };

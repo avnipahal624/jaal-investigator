@@ -91,7 +91,10 @@ type AnalysisStatus =
   | "FAILED"
   | "UNAVAILABLE";
 
-type TranscriptionStatus = AnalysisStatus;
+/** Transcription can additionally finish with positive no-speech evidence. */
+type TranscriptionState = AnalysisStatus | "NO_SPEECH";
+
+type TranscriptionStatus = TranscriptionState;
 
 // ---------------------------------------------------------------------------
 // Shared lookups + access control
@@ -515,6 +518,7 @@ export const internalSetTranscription = internalMutation({
       v.literal("COMPLETED"),
       v.literal("FAILED"),
       v.literal("UNAVAILABLE"),
+      v.literal("NO_SPEECH"),
     ),
     provider: v.optional(v.string()),
     language: v.optional(v.string()),

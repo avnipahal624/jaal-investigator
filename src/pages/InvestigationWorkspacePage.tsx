@@ -15,7 +15,7 @@ import { Panel } from "@/components/ui/panel";
 import { api } from "@/convex/_generated/api";
 import { useJaal } from "@/state/JaalProvider";
 import { cn } from "@/lib/utils";
-import { statusStyle } from "@/theme/status";
+import { isAiEngine, statusStyle } from "@/theme/status";
 import type {
   CaseRuntime,
   DetectedTactic,
@@ -119,10 +119,9 @@ export default function InvestigationWorkspacePage() {
     return node?.id ?? null;
   };
 
-  const engineLabel =
-    runtime.strategy?.source === "ANTHROPIC"
-      ? "claude / live ai"
-      : "simulation";
+  const engineLabel = isAiEngine(runtime.strategy?.source)
+    ? "groq / live ai"
+    : "simulation";
 
   const board = (defaultView?: "board" | "list") => (
     <EvidenceBoard
@@ -213,7 +212,7 @@ export default function InvestigationWorkspacePage() {
                 <Link
                   to={`/investigations/${investigation.id}/intelligence`}
                   className="whitespace-nowrap border px-1.5 py-px font-mono text-[8px] uppercase tracking-widest"
-                  style={statusStyle("engine", runtime.strategy?.source === "ANTHROPIC" ? "claude" : "simulation")}
+                  style={statusStyle("engine", isAiEngine(runtime.strategy?.source) ? "claude" : "simulation")}
                 >
                   Intelligence hub
                 </Link>
@@ -221,9 +220,7 @@ export default function InvestigationWorkspacePage() {
                   className="whitespace-nowrap border px-1.5 py-px font-mono text-[8px] uppercase tracking-widest"
                   style={statusStyle(
                     "engine",
-                    runtime.strategy?.source === "ANTHROPIC"
-                      ? "claude"
-                      : "simulation",
+                    isAiEngine(runtime.strategy?.source) ? "claude" : "simulation",
                   )}
                 >
                   {engineLabel}

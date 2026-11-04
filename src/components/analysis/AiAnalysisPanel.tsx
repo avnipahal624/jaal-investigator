@@ -6,7 +6,7 @@ import {
   STAGE_TACTIC_HINT,
 } from "@/services/strategyService";
 import { cn } from "@/lib/utils";
-import { statusDot } from "@/theme/status";
+import { isAiEngine, statusDot } from "@/theme/status";
 import type { CaseRuntime } from "@/types/investigation";
 import { formatClock } from "@/utils/formatters";
 import { Brain } from "lucide-react";
@@ -148,7 +148,7 @@ export function AiAnalysisPanel({ runtime }: { runtime: CaseRuntime }) {
         ))}
       </div>
 
-      {/* Engine mode — CLAUDE only when the strategy came from a real, validated
+      {/* Engine mode — GROQ only when the strategy came from a real, validated
           provider response; every rules-engine path (including provider
           errors) reads SIMULATION. */}
       <p className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-widest text-jmuted/70">
@@ -157,12 +157,12 @@ export function AiAnalysisPanel({ runtime }: { runtime: CaseRuntime }) {
           style={{
             background: statusDot(
               "engine",
-              runtime.strategy?.source === "ANTHROPIC" ? "claude" : "simulation",
+              isAiEngine(runtime.strategy?.source) ? "claude" : "simulation",
             ),
           }}
         />
-        {runtime.strategy?.source === "ANTHROPIC"
-          ? "convex action · anthropic claude"
+        {isAiEngine(runtime.strategy?.source)
+          ? "convex action · groq llm"
           : "local rules engine · simulation mode"}
       </p>
     </div>

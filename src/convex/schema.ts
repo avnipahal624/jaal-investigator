@@ -434,6 +434,8 @@ const schema = defineSchema(
           v.literal("COMPLETED"),
           v.literal("FAILED"),
           v.literal("UNAVAILABLE"),
+          /** Positive speech-detection evidence: audio contained no speech. */
+          v.literal("NO_SPEECH"),
         ),
         provider: v.optional(v.string()),
         /** Language reported by the speech-to-text provider, when it says so. */

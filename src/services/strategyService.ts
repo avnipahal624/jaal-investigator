@@ -96,14 +96,14 @@ export interface Strategy {
   missing: string;
   question: string;
   reason: string;
-  /** ANTHROPIC when produced by the LLM action, SIMULATION for rule-based */
+  /** GROQ when produced by the LLM action, SIMULATION for rule-based */
   source?: string;
   approved?: boolean;
 }
 
 /**
  * The backend strategy suggestion wins when present: it carries the LLM
- * (Claude) authored analysis when configured, otherwise the same rules run
+ * (Groq) authored analysis when configured, otherwise the same rules run
  * server-side. Local derivation remains as the offline fallback.
  */
 export function buildStrategy(runtime: CaseRuntime): Strategy | null {

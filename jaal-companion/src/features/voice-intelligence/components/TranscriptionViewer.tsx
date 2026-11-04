@@ -117,13 +117,19 @@ export function TranscriptionViewer({
       ) : (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>
-            {status === "PROCESSING" ? "Transcribing…" : "No transcript yet"}
+            {status === "PROCESSING"
+              ? "Transcribing…"
+              : status === "NO_SPEECH"
+                ? "No speech detected"
+                : "No transcript yet"}
           </Text>
           <Text style={styles.note}>
             {describeProcessingError("transcription", error) ??
               (status === "PROCESSING"
                 ? "This usually takes under a minute."
-                : "Once the audio is read, the transcript will appear here.")}
+                : status === "NO_SPEECH"
+                  ? "The audio was analysed, but no speech was found in it. If the call did contain speech, add what was said yourself."
+                  : "Once the audio is read, the transcript will appear here.")}
           </Text>
         </View>
       )}

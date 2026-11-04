@@ -21,6 +21,11 @@ export type SttSegment = {
   startMs?: number;
   endMs?: number;
   text: string;
+  /** Whisper metadata: probability the segment contains no speech (0-1). */
+  noSpeechProb?: number;
+  /** Whisper metadata: average log-probability of the decoded tokens. */
+  avgLogprob?: number;
+  compressionRatio?: number;
 };
 
 export type SttResult = {
@@ -30,6 +35,8 @@ export type SttResult = {
   language?: string;
   /** True only when the provider actually labels who spoke. */
   diarized: boolean;
+  /** Speech/no-speech evidence computed from provider metadata. */
+  speech?: SpeechAssessment;
 };
 
 /**
@@ -219,6 +226,9 @@ export function parseSttResponse(data: unknown): SttResult {
         end?: unknown;
         text?: unknown;
         speaker?: unknown;
+        no_speech_prob?: unknown;
+        avg_logprob?: unknown;
+        compression_ratio?: unknown;
       };
       const start = finiteSeconds(s.start);
       const end = finiteSeconds(s.end);
@@ -228,6 +238,9 @@ export function parseSttResponse(data: unknown): SttResult {
         end === null
           ? undefined
           : Math.max(startMs ?? 0, Math.max(0, Math.round(end * 1000)));
+      const noSpeechProb = finiteSeconds(s.no_speech_prob);
+      const avgLogprob = finiteSeconds(s.avg_logprob);
+      const compressionRatio = finiteSeconds(s.compression_ratio);
       return {
         ...(typeof s.speaker === "string" && s.speaker.trim()
           ? { speaker: s.speaker.trim().slice(0, 40) }
@@ -235,6 +248,11 @@ export function parseSttResponse(data: unknown): SttResult {
         ...(startMs !== undefined ? { startMs } : {}),
         ...(endMs !== undefined ? { endMs } : {}),
         text: typeof s.text === "string" ? s.text.trim() : "",
+        ...(noSpeechProb !== null
+          ? { noSpeechProb: Math.min(1, Math.max(0, noSpeechProb)) }
+          : {}),
+        ...(avgLogprob !== null ? { avgLogprob } : {}),
+        ...(compressionRatio !== null ? { compressionRatio } : {}),
       };
     })
     .filter((s) => s.text.length > 0);
@@ -267,6 +285,257 @@ export function parseSttResponse(data: unknown): SttResult {
 }
 
 // ---------------------------------------------------------------------------
+// Speech / no-speech evidence
+// ---------------------------------------------------------------------------
+
+/**
+ * Deliberately conservative: a segment is only treated as silence when the
+ * provider's no-speech probability is high AND the decode confidence is poor.
+ * Quiet but genuine speech (low amplitude, confidently decoded) stays in.
+ */
+export const NO_SPEECH_PROB_THRESHOLD = 0.6;
+export const AVG_LOGPROB_THRESHOLD = -1;
+/** Below this, an audio file cannot contain a spoken word. */
+export const MIN_SPEECH_AUDIO_MS = 250;
+/**
+ * Peak amplitude below which a WAV is digitally silent (no signal at all).
+ * Deliberately tiny: this must never reject quiet-but-real speech, only audio
+ * that contains no signal whatsoever.
+ */
+export const DIGITAL_SILENCE_PEAK = 1e-4;
+
+export type SpeechAssessment = {
+  /** False ONLY when the evidence supports "no speech". */
+  speechDetected: boolean;
+  /** True when there was enough evidence to make a call either way. */
+  confident: boolean;
+  reason: "speech" | "no-speech" | "insufficient-metadata";
+  detail: "audio-too-short" | "provider-metadata" | "digital-silence" | null;
+  meanNoSpeechProb: number | null;
+  meanAvgLogprob: number | null;
+};
+
+/** Raised instead of storing a transcript when the audio has no speech. */
+export class NoSpeechError extends Error {
+  readonly assessment: SpeechAssessment;
+
+  constructor(assessment: SpeechAssessment) {
+    super("stt-no-speech");
+    this.name = "NoSpeechError";
+    this.assessment = assessment;
+  }
+}
+
+/**
+ * Decide whether the audio actually contains speech.
+ *
+ * Missing metadata is never treated as silence: the provider simply did not
+ * tell us, so the transcript stands (labelled unverified by the caller). This
+ * is what stops a silent recording from being "successfully" transcribed into
+ * a hallucinated stock phrase, without rejecting quiet real speech.
+ */
+export function assessSpeech(input: {
+  segments: SttSegment[] | null | undefined;
+  durationMs?: number | null;
+  /** Measured signal level, when the audio format allowed measuring it. */
+  signal?: { peak: number } | null;
+}): SpeechAssessment {
+  const duration = input.durationMs;
+  const segments = input.segments ?? [];
+
+  const judged = segments.filter(
+    (s) => s.noSpeechProb !== undefined || s.avgLogprob !== undefined,
+  );
+  const probs = judged
+    .map((s) => s.noSpeechProb)
+    .filter((n): n is number => typeof n === "number");
+  const logprobs = judged
+    .map((s) => s.avgLogprob)
+    .filter((n): n is number => typeof n === "number");
+  const mean = (values: number[]): number | null =>
+    values.length
+      ? Math.round(
+          (values.reduce((a, b) => a + b, 0) / values.length) * 1_000,
+        ) / 1_000
+      : null;
+  const meanNoSpeechProb = mean(probs);
+  const meanAvgLogprob = mean(logprobs);
+
+  if (
+    typeof duration === "number" &&
+    duration > 0 &&
+    duration < MIN_SPEECH_AUDIO_MS
+  ) {
+    return {
+      speechDetected: false,
+      confident: true,
+      reason: "no-speech",
+      detail: "audio-too-short",
+      meanNoSpeechProb,
+      meanAvgLogprob,
+    };
+  }
+
+  // Provider metadata is not always usable: Groq's turbo model has been
+  // observed returning no_speech_prob 0 for a digitally silent file while
+  // still hallucinating "Thank you.". Measured signal level does not lie.
+  if (input.signal && input.signal.peak <= DIGITAL_SILENCE_PEAK) {
+    return {
+      speechDetected: false,
+      confident: true,
+      reason: "no-speech",
+      detail: "digital-silence",
+      meanNoSpeechProb,
+      meanAvgLogprob,
+    };
+  }
+
+  if (judged.length === 0) {
+    return {
+      speechDetected: true,
+      confident: false,
+      reason: "insufficient-metadata",
+      detail: null,
+      meanNoSpeechProb: null,
+      meanAvgLogprob: null,
+    };
+  }
+
+  const everySegmentSilent = judged.every((s) => {
+    const probSilent =
+      s.noSpeechProb === undefined
+        ? null
+        : s.noSpeechProb >= NO_SPEECH_PROB_THRESHOLD;
+    const logprobSilent =
+      s.avgLogprob === undefined ? null : s.avgLogprob <= AVG_LOGPROB_THRESHOLD;
+    if (probSilent === null) return logprobSilent === true;
+    if (logprobSilent === null) return probSilent;
+    return probSilent && logprobSilent;
+  });
+
+  if (everySegmentSilent) {
+    return {
+      speechDetected: false,
+      confident: true,
+      reason: "no-speech",
+      detail: "provider-metadata",
+      meanNoSpeechProb,
+      meanAvgLogprob,
+    };
+  }
+
+  return {
+    speechDetected: true,
+    confident: true,
+    reason: "speech",
+    detail: null,
+    meanNoSpeechProb,
+    meanAvgLogprob,
+  };
+}
+
+export type WavSignal = { durationMs: number; peak: number; rms: number };
+
+/**
+ * Measure an uncompressed 16-bit PCM WAV. Returns null for compressed or
+ * unusual formats, so callers fall back to provider metadata only.
+ * Peak/RMS are normalised to 0..1 of full scale.
+ */
+export function wavSignal(bytes: Uint8Array): WavSignal | null {
+  if (bytes.byteLength < 44) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (offset: number) =>
+    String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3),
+    );
+  if (tag(0) !== "RIFF" || tag(8) !== "WAVE") return null;
+
+  let offset = 12;
+  let byteRate = 0;
+  let audioFormat = 0;
+  let bitsPerSample = 0;
+  let dataOffset = -1;
+  let dataBytes = 0;
+  while (offset + 8 <= view.byteLength) {
+    const id = tag(offset);
+    const size = view.getUint32(offset + 4, true);
+    const body = offset + 8;
+    if (id === "fmt ") {
+      if (size < 16 || body + 16 > view.byteLength) return null;
+      audioFormat = view.getUint16(body, true);
+      byteRate = view.getUint32(body + 8, true);
+      bitsPerSample = view.getUint16(body + 14, true);
+    } else if (id === "data") {
+      dataOffset = body;
+      dataBytes = Math.min(size, view.byteLength - body);
+      break;
+    }
+    offset = body + size + (size % 2);
+  }
+
+  if (audioFormat !== 1 || bitsPerSample !== 16 || !byteRate || dataOffset < 0) {
+    return null;
+  }
+  const samples = Math.floor(dataBytes / 2);
+  if (samples <= 0) return null;
+
+  let peak = 0;
+  let sumSquares = 0;
+  for (let i = 0; i < samples; i += 1) {
+    const value = view.getInt16(dataOffset + i * 2, true) / 32_768;
+    if (Math.abs(value) > peak) peak = Math.abs(value);
+    sumSquares += value * value;
+  }
+
+  return {
+    durationMs: Math.round((dataBytes / byteRate) * 1000),
+    peak: Math.round(peak * 1e6) / 1e6,
+    rms: Math.round(Math.sqrt(sumSquares / samples) * 1e6) / 1e6,
+  };
+}
+
+/**
+ * Duration of an uncompressed PCM WAV from its headers, or null when the bytes
+ * are not a parseable WAV (compressed formats are left to the provider).
+ * Used as a second, provider-independent signal for very short audio.
+ */
+export function wavDurationMs(bytes: Uint8Array): number | null {
+  if (bytes.byteLength < 44) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (offset: number) =>
+    String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3),
+    );
+  if (tag(0) !== "RIFF" || tag(8) !== "WAVE") return null;
+
+  let offset = 12;
+  let byteRate = 0;
+  let dataBytes = 0;
+  while (offset + 8 <= view.byteLength) {
+    const id = tag(offset);
+    const size = view.getUint32(offset + 4, true);
+    const body = offset + 8;
+    if (id === "fmt ") {
+      if (size < 12 || body + 12 > view.byteLength) return null;
+      byteRate = view.getUint32(body + 8, true);
+    } else if (id === "data") {
+      dataBytes = Math.min(size, view.byteLength - body);
+      break;
+    }
+    offset = body + size + (size % 2);
+  }
+  if (!byteRate || !dataBytes) return null;
+  const ms = Math.round((dataBytes / byteRate) * 1000);
+  return ms > 0 ? ms : null;
+}
+
+// ---------------------------------------------------------------------------
 // Provider call — timeout + bounded retry
 // ---------------------------------------------------------------------------
 
@@ -292,6 +561,7 @@ export function describeSttError(err: unknown): string {
   if (status) return `stt-http-${status[1]}`;
   if (/abort|timeout/i.test(message)) return "stt-timeout";
   if (/stt-parse|invalid transcription/i.test(message)) return "stt-invalid-response";
+  if (/stt-no-speech/i.test(message)) return "stt-no-speech";
   if (/fetch|network|ECONN|ENOTFOUND/i.test(message)) return "stt-network-error";
   return "stt-provider-error";
 }
@@ -366,12 +636,23 @@ export async function transcribeAudio(args: {
       if (!result.text && !result.segments) {
         throw new Error("stt-parse-error: transcription contained no text");
       }
-      return result;
+      // A non-empty transcript is NOT proof of speech: Whisper hallucinates
+      // stock phrases on silence. Reject only on positive evidence of silence.
+      const signal = wavSignal(bytes);
+      const speech = assessSpeech({
+        segments: result.segments,
+        durationMs: signal?.durationMs ?? wavDurationMs(bytes),
+        signal,
+      });
+      if (!speech.speechDetected && speech.confident) {
+        throw new NoSpeechError(speech);
+      }
+      return { ...result, speech };
     } catch (err) {
       lastError = err;
       const message = err instanceof Error ? err.message : "";
       const isAbort = /abort/i.test(message);
-      const isNetwork = !/stt-http-|stt-parse-/.test(message);
+      const isNetwork = !/stt-http-|stt-parse-|stt-no-speech/.test(message);
       const retryable = isAbort || isNetwork;
       if (attempt < config.maxAttempts && retryable) {
         await sleep(400 * attempt);
