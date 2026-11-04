@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -15,6 +15,7 @@ import {
   isAllowedMime,
   readBytes,
   resolveMimeType,
+  newSubmissionKey,
   sha256Hex,
   uploadBytes,
 } from "../../src/services/voiceUpload";
@@ -39,6 +40,9 @@ export default function Recording() {
   const [claimedIdentity, setClaimedIdentity] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Synchronous guards: two taps in one frame both see the old state value.
+  const inFlight = useRef(false);
+  const submissionKey = useRef(newSubmissionKey());
 
   async function pickFile() {
     setError(null);
@@ -62,6 +66,7 @@ export default function Recording() {
         setError("Please choose an audio file (MP3, M4A, WAV, AAC, OGG, WebM or AMR).");
         return;
       }
+      submissionKey.current = newSubmissionKey();
       setAsset(a);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not open the file picker.");
@@ -69,6 +74,7 @@ export default function Recording() {
   }
 
   async function submit() {
+    if (busy || inFlight.current) return;
     setError(null);
     if (!asset) {
       setError("Choose a recording first.");
@@ -78,6 +84,7 @@ export default function Recording() {
       setError("Please confirm your consent before uploading.");
       return;
     }
+    inFlight.current = true;
     setBusy(true);
     try {
       const bytes = await readBytes(asset.uri);
@@ -98,6 +105,7 @@ export default function Recording() {
         fileHash,
         consentAccepted: true,
         consentVersion: CONSENT_VERSION,
+        idempotencyKey: submissionKey.current,
         whatHappened: whatHappened.trim() || undefined,
         claimedIdentity: claimedIdentity.trim() || undefined,
       });
@@ -106,13 +114,17 @@ export default function Recording() {
       if (!recordingId) throw new Error("Could not create the report.");
 
       // Kick off transcription + analysis (honest pending/unavailable states
-      // are shown on the next screen). Don't block navigation on it.
-      void process({ recordingId: recordingId as Id<"voice_recordings"> }).catch(() => {});
+      // are shown on the next screen). A failure is stored server-side by the
+      // action, so the results screen offers a real Retry instead of losing it.
+      void process({ recordingId: recordingId as Id<"voice_recordings"> }).catch(
+        () => undefined,
+      );
 
       router.replace(`/analysis/${recordingId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }

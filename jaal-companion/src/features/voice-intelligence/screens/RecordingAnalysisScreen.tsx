@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation } from "convex/react";
@@ -14,6 +14,7 @@ import { RecordingPreview } from "../components/RecordingPreview";
 import { RecordingConsent } from "../components/RecordingConsent";
 import { uploadRecording } from "../services/recording-service";
 import { processRecording } from "../services/voice-analysis-service";
+import { newSubmissionKey } from "../../../services/voiceUpload";
 
 /**
  * Recorded-call analysis — the cross-platform workflow.
@@ -42,11 +43,18 @@ export function RecordingAnalysisScreen() {
   // Set once the report exists, so a retry re-runs processing instead of
   // uploading the same file again and creating a duplicate report.
   const [createdId, setCreatedId] = useState<string | null>(null);
+  // Two taps in the same frame both see the old `stage` value, so a render
+  // guard alone is not enough: the ref is synchronous.
+  const inFlight = useRef(false);
+  // One key per selected file. Retries reuse it; the server returns the report
+  // it already created instead of making a second one.
+  const submissionKey = useRef(newSubmissionKey());
 
   const busy = stage !== "idle";
 
   async function submit() {
-    if (busy) return;
+    if (busy || inFlight.current) return;
+    inFlight.current = true;
     if (!file) {
       setError("Choose a recording first.");
       return;
@@ -64,6 +72,7 @@ export function RecordingAnalysisScreen() {
         setStage("uploading");
         const created = await uploadRecording({
           file,
+          idempotencyKey: submissionKey.current,
           generateUploadUrl: () => generateUploadUrl({}),
           createVoiceReport,
           context: {
@@ -83,14 +92,22 @@ export function RecordingAnalysisScreen() {
       router.replace(`/voice/${recordingId}`);
 
       try {
-        await processRecording(recordingId, runProcessing);
+        const outcome = await processRecording(recordingId, runProcessing);
+        if (!outcome.ok) {
+          // The report and recording are already saved; only the AI step
+          // failed. Say exactly that instead of implying the upload was lost.
+          Alert.alert(
+            "Report saved — analysis didn’t start",
+            `${outcome.message}\n\nYour recording and report reference are saved. Open the analysis to retry.`,
+          );
+        }
       } catch (err) {
         // The report already exists; say so, and let the results screen retry.
         Alert.alert(
-          "Processing didn’t start",
+          "Report saved — processing didn’t start",
           err instanceof Error
-            ? err.message
-            : "Open this analysis and tap Retry when you’re back online.",
+            ? `${err.message}\n\nYour recording is saved. Open the analysis and tap Retry when you’re back online.`
+            : "Your recording is saved. Open the analysis and tap Retry when you’re back online.",
         );
       }
     } catch (err) {
@@ -98,6 +115,8 @@ export function RecordingAnalysisScreen() {
       // be retried safely without creating a duplicate.
       setError(uploadFailureMessage(err));
       setStage("idle");
+    } finally {
+      inFlight.current = false;
     }
   }
 
@@ -121,8 +140,16 @@ export function RecordingAnalysisScreen() {
           onSelect={(selected) => {
             setFile(selected);
             setError(null);
+            // A different file is a different submission: never reuse the
+            // previous key or a previous report id.
+            submissionKey.current = newSubmissionKey();
+            setCreatedId(null);
           }}
-          onRemove={() => setFile(null)}
+          onRemove={() => {
+            setFile(null);
+            setCreatedId(null);
+            submissionKey.current = newSubmissionKey();
+          }}
           disabled={busy}
         />
 
@@ -184,7 +211,7 @@ export function RecordingAnalysisScreen() {
           }
           onPress={submit}
           loading={busy}
-          disabled={!file || !consent}
+          disabled={!file || (!consent && !createdId)}
         />
 
         <Text style={styles.disclaimer}>

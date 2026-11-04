@@ -212,6 +212,10 @@ function UploadFlow({
   const [attention, setAttention] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  // Synchronous guards: state updates are async, so two taps in one frame both
+  // see `submitting === false`. The key makes a lost response retry-safe too.
+  const submitInFlight = useRef(false);
+  const submissionKey = useRef<string>(crypto.randomUUID());
 
   const flashAttention = (msg: string) => {
     setAttention(msg);
@@ -221,6 +225,7 @@ function UploadFlow({
   const resetFile = useCallback(() => {
     setFile(null);
     setFileHash(null);
+    submissionKey.current = crypto.randomUUID();
     setDuration(null);
     setStatus("idle");
     setError(null);
@@ -258,6 +263,7 @@ function UploadFlow({
       }
 
       setFile(picked);
+      submissionKey.current = crypto.randomUUID();
       setStatus("hashing");
       setHashing(true);
       setProgress(15);
@@ -303,6 +309,7 @@ function UploadFlow({
   };
 
   const handleSubmit = async () => {
+    if (submitInFlight.current) return;
     const problem = validate();
     if (problem) {
       flashAttention(problem);
@@ -310,6 +317,7 @@ function UploadFlow({
     }
     if (!file || !fileHash) return;
 
+    submitInFlight.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -334,6 +342,7 @@ function UploadFlow({
         durationSeconds: duration ?? undefined,
         consentAccepted,
         consentVersion: "voice-consent-1",
+        idempotencyKey: submissionKey.current,
         callerPhone: callerPhone.trim() || undefined,
         claimedIdentity: claimedIdentity.trim() || undefined,
         approximateCallAt: Number.isFinite(approxCallAt) ? approxCallAt : undefined,
@@ -352,6 +361,7 @@ function UploadFlow({
           : "Could not submit your recording. Please try again.",
       );
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
   };

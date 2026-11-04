@@ -38,7 +38,14 @@ import { v } from "convex/values";
 import { z } from "zod";
 import { internal } from "./_generated/api";
 import { sanitize } from "./ai";
-import { callGroq, currentGroqModel } from "./groqClient";
+import {
+  GroqError,
+  callGroq,
+  currentGroqModel,
+  describeGroqError,
+  groqRetryAfterSeconds,
+  isRetryableGroqError,
+} from "./groqClient";
 import {
   NoSpeechError,
   buildTranscriptBlock,
@@ -200,14 +207,32 @@ function extractJson(text: string): unknown | null {
   }
 }
 
+/**
+ * Result of one processing request. `state` tells the client whether work ran,
+ * was skipped because it was already done, or was refused because another run
+ * holds the lease — so a retry is never mistaken for a fresh analysis.
+ */
+type ProcessOutcome = {
+  transcriptionStatus: string;
+  analysisStatus: string;
+  assessment: string | null;
+  providersRan: { transcription: string | null; analysis: string | null };
+  state?:
+    | "COMPLETED"
+    | "ALREADY_COMPLETE"
+    | "ALREADY_PROCESSING"
+    | "OWNER_BUSY"
+    | "NO_SPEECH"
+    | "FAILED";
+  /** True when retrying later can reasonably succeed. */
+  retryable?: boolean;
+  /** Provider-requested wait before a retry, when it sent Retry-After. */
+  retryAfterMs?: number;
+};
+
 export const processRecording = action({
   args: { recordingId: v.id("voice_recordings") },
-  handler: async (ctx: ActionCtx, args): Promise<{
-    transcriptionStatus: string;
-    analysisStatus: string;
-    assessment: string | null;
-    providersRan: { transcription: string | null; analysis: string | null };
-  }> => {
+  handler: async (ctx: ActionCtx, args): Promise<ProcessOutcome> => {
     // 1 + ownership: load the recording through an internal query that checks
     // the caller owns it before anything is processed or stored.
     const rec = (await ctx.runQuery(internal.voice.internalGetRecording, {
@@ -220,6 +245,10 @@ export const processRecording = action({
       transcriptSource: string | null;
       transcriptSegments?: { speaker?: string; startMs?: number; endMs?: number; text: string }[] | null;
       transcriptLanguage?: string | null;
+      transcriptionStatus: string;
+      analysisStatus: string;
+      assessment: string | null;
+      sizeBytes: number;
       callerPhone: string | null;
       claimedIdentity: string | null;
       moneyRequested: boolean;
@@ -229,15 +258,47 @@ export const processRecording = action({
     } | null;
     if (!rec) throw new Error("Recording not found for your account.");
 
-    // Consume one unit of the per-owner AI budget before any heavy work.
-    await ctx.runMutation(internal.voice.recordVoiceRequest, {
-      kind: "voice-processing",
-    });
-
     const providersRan: { transcription: string | null; analysis: string | null } = {
       transcription: null,
       analysis: null,
     };
+    const noWork = {
+      transcriptionStatus: rec.transcriptionStatus,
+      analysisStatus: rec.analysisStatus,
+      assessment: rec.assessment,
+      providersRan,
+    };
+
+    // Idempotent replays: completed work is never redone, and positive
+    // no-speech evidence is not "retried" into a hallucinated transcript.
+    if (rec.analysisStatus === "COMPLETED") {
+      return { ...noWork, state: "ALREADY_COMPLETE" };
+    }
+    if (rec.transcriptionStatus === "NO_SPEECH" && !(rec.transcript ?? "").trim()) {
+      return { ...noWork, state: "NO_SPEECH" };
+    }
+
+    // Single-flight lease (persisted, so it survives an action restart).
+    const runId = crypto.randomUUID();
+    const lease = await ctx.runMutation(
+      internal.voice.internalAcquireProcessingLease,
+      { recordingId: args.recordingId, runId },
+    );
+    if (!lease.acquired) {
+      return {
+        ...noWork,
+        state: lease.reason === "owner-busy" ? "OWNER_BUSY" : "ALREADY_PROCESSING",
+        retryable: true,
+        retryAfterMs: Math.max(0, lease.leaseUntil - Date.now()),
+      };
+    }
+
+    try {
+    // Consume one unit of the per-owner AI budget only once this run owns the
+    // lease, so a duplicate tap cannot burn a second unit.
+    await ctx.runMutation(internal.voice.recordVoiceRequest, {
+      kind: "voice-processing",
+    });
 
     // 2. Integrity: re-read the ORIGINAL blob and re-verify SHA-256. We never
     //    analyse a file whose bytes we cannot confirm.
@@ -256,6 +317,11 @@ export const processRecording = action({
       if (recomputed.toLowerCase() !== rec.fileHash.toLowerCase()) {
         throw new Error("integrity mismatch between stored bytes and recorded hash");
       }
+      // The declared size is part of the report. Stored bytes that disagree
+      // with it are not the file the consumer described, so processing stops.
+      if (bytes.byteLength !== rec.sizeBytes) {
+        throw new Error("integrity mismatch between stored bytes and declared size");
+      }
     } catch {
       // Integrity could not be confirmed — stop honestly. No fabricated
       // transcript, no analysis.
@@ -263,6 +329,7 @@ export const processRecording = action({
         recordingId: args.recordingId,
         status: "FAILED",
         error: "integrity-check-failed",
+        runId,
       });
       await ctx.runMutation(internal.voice.internalSetAnalysis, {
         recordingId: args.recordingId,
@@ -270,14 +337,16 @@ export const processRecording = action({
         assessment: "UNABLE_TO_ASSESS",
         error: "integrity-check-failed",
         limitations: [
-          "The uploaded audio could not be verified against its recorded hash, so it was not analysed.",
+          "The uploaded audio could not be verified against its recorded hash and size, so it was not analysed.",
         ],
+        runId,
       });
       return {
         transcriptionStatus: "FAILED",
         analysisStatus: "UNAVAILABLE",
         assessment: "UNABLE_TO_ASSESS",
         providersRan,
+        state: "FAILED",
       };
     }
 
@@ -303,9 +372,17 @@ export const processRecording = action({
     let speechMetadataMissing = false;
 
     const stt: SttConfig = resolveSttConfig(process.env);
-    if (stt.configured) {
+    // Reuse work that already succeeded. Re-running Whisper on retry would
+    // burn quota and could replace a stored machine transcript with a
+    // different one — the transcript is evidence, not a cache.
+    const hasMachineTranscript =
+      transcriptSource === "SPEECH_PROVIDER" && transcriptText.trim().length > 0;
+    const hasConsumerTranscript =
+      transcriptSource === "CONSUMER_PROVIDED" && transcriptText.trim().length > 0;
+    if (stt.configured && !hasMachineTranscript && !hasConsumerTranscript) {
       await ctx.runMutation(internal.voice.internalMarkTranscribing, {
         recordingId: args.recordingId,
+        runId,
       });
       try {
         const out = await transcribeAudio({
@@ -325,6 +402,7 @@ export const processRecording = action({
             status: "FAILED",
             provider: stt.name,
             error: "empty-transcript",
+            runId,
           });
           await ctx.runMutation(internal.voice.internalSetAnalysis, {
             recordingId: args.recordingId,
@@ -334,6 +412,7 @@ export const processRecording = action({
             limitations: [
               "Speech-to-text returned no usable words, so no analysis was produced.",
             ],
+            runId,
           });
           return {
             transcriptionStatus: "FAILED",
@@ -349,6 +428,7 @@ export const processRecording = action({
           transcript: transcriptText,
           segments: out.segments,
           language: transcriptLanguage,
+          runId,
         });
       } catch (err) {
         // Positive evidence of silence is its own state, not a failure: no
@@ -359,6 +439,7 @@ export const processRecording = action({
             status: "NO_SPEECH",
             provider: stt.name,
             error: "no-speech-detected",
+            runId,
           });
           await ctx.runMutation(internal.voice.internalSetAnalysis, {
             recordingId: args.recordingId,
@@ -371,21 +452,30 @@ export const processRecording = action({
                 ? ["The audio was too short to contain a spoken word."]
                 : []),
             ],
+            runId,
           });
           return {
             transcriptionStatus: "NO_SPEECH",
             analysisStatus: "UNAVAILABLE",
             assessment: "UNABLE_TO_ASSESS",
             providersRan,
+            state: "NO_SPEECH",
           };
         }
         // Store the real (bounded) reason so the UI can say what failed
         // without exposing the key or an unbounded provider payload.
+        const sttError = describeSttError(err);
+        const sttRetryable =
+          sttError === "stt-http-429" ||
+          sttError === "stt-timeout" ||
+          sttError === "stt-network-error" ||
+          sttError.startsWith("stt-http-5");
         await ctx.runMutation(internal.voice.internalSetTranscription, {
           recordingId: args.recordingId,
           status: "FAILED",
           provider: stt.name,
-          error: describeSttError(err),
+          error: sttError,
+          runId,
         });
         await ctx.runMutation(internal.voice.internalSetAnalysis, {
           recordingId: args.recordingId,
@@ -393,14 +483,19 @@ export const processRecording = action({
           assessment: "UNABLE_TO_ASSESS",
           error: "transcription-failed",
           limitations: [
-            "Speech-to-text failed, so the audio could not be analysed. You can retry or add what was said yourself.",
+            sttRetryable
+              ? "Speech-to-text could not run right now (the provider was busy or unreachable). The original recording is saved — you can retry or add what was said yourself."
+              : "Speech-to-text failed, so the audio could not be analysed. You can retry or add what was said yourself.",
           ],
+          runId,
         });
         return {
           transcriptionStatus: "FAILED",
           analysisStatus: "UNAVAILABLE",
           assessment: "UNABLE_TO_ASSESS",
           providersRan,
+          state: "FAILED",
+          retryable: sttRetryable,
         };
       }
     } else if (!transcriptText.trim()) {
@@ -415,6 +510,7 @@ export const processRecording = action({
         recordingId: args.recordingId,
         status: "UNAVAILABLE",
         error: configIssue,
+        runId,
       });
       await ctx.runMutation(internal.voice.internalSetAnalysis, {
         recordingId: args.recordingId,
@@ -428,6 +524,7 @@ export const processRecording = action({
               ? "Speech-to-text is misconfigured on this deployment (the endpoint is not a valid http(s) URL), and no written transcript was provided, so the audio could not be analysed. You can add what was said and analyse that instead."
               : "Speech-to-text is not configured on this deployment, and no written transcript was provided, so the audio could not be analysed. You can add what was said and analyse that instead.",
         ],
+        runId,
       });
       return {
         transcriptionStatus: "UNAVAILABLE",
@@ -436,12 +533,9 @@ export const processRecording = action({
         providersRan,
       };
     } else {
-      // Consumer already supplied a transcript; keep it and note the source.
-      await ctx.runMutation(internal.voice.internalSetTranscription, {
-        recordingId: args.recordingId,
-        status: "COMPLETED",
-        transcript: transcriptText,
-      });
+      // A transcript is already present (machine, or typed by the consumer).
+      // Keep it EXACTLY as stored, including its source label: a self-reported
+      // transcript must never be relabelled as a machine transcript.
     }
 
     // 4. Analysis on the real transcript text.
@@ -455,6 +549,7 @@ export const processRecording = action({
         limitations: [
           "The AI analysis provider is not configured on this deployment, so no analysis was produced.",
         ],
+        runId,
       });
       return {
         transcriptionStatus: "COMPLETED",
@@ -466,6 +561,7 @@ export const processRecording = action({
 
     await ctx.runMutation(internal.voice.internalMarkAnalysing, {
       recordingId: args.recordingId,
+      runId,
     });
 
     const context = [
@@ -490,14 +586,17 @@ export const processRecording = action({
         transcriptSegments,
         context,
       );
+      providersRan.analysis = currentGroqModel();
       const raw = await callGroq(apiKey, VOICE_SYSTEM, userContent, 2_000, {
         json: true,
       });
-      if (!raw) throw new Error("empty model response");
+      // No text is NOT an empty-but-valid result: it is a failed analysis.
+      if (!raw) throw new GroqError(0, { code: "groq-empty-response" });
       const parsed = ANALYSIS_SCHEMA.safeParse(extractJson(sanitize(raw, 20_000)));
-      if (!parsed.success) throw new Error("invalid structured output");
+      if (!parsed.success) {
+        throw new GroqError(0, { code: "groq-invalid-response" });
+      }
       const clean = sanitizeAnalysis(parsed.data);
-      providersRan.analysis = currentGroqModel();
 
       // Ground the model's output in the recording before storing it: a
       // timestamp must land on a real segment start, an extracted identifier
@@ -556,6 +655,7 @@ export const processRecording = action({
         ],
         provider: "groq",
         model: currentGroqModel(),
+        runId,
       });
 
       return {
@@ -563,24 +663,58 @@ export const processRecording = action({
         analysisStatus: "COMPLETED",
         assessment: clean.overallAssessment,
         providersRan,
+        state: "COMPLETED",
       };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "provider-error";
+      // Classify the failure for the UI: a rate limit or upstream outage is
+      // retryable; a rejected/truncated answer is not something to show. The
+      // transcript is already stored, so no completed work is lost.
+      const code = describeGroqError(err);
+      const retryable = isRetryableGroqError(err) || code === "groq-empty-response";
+      const retryAfterSeconds = groqRetryAfterSeconds(err);
+      const limitations = [
+        code === "groq-rate-limited"
+          ? "The AI provider is rate-limiting requests right now. Your transcript is saved — try again in a moment. No result was invented."
+          : code === "groq-unavailable"
+            ? "The AI provider is temporarily unavailable. Your transcript is saved — try again shortly. No result was invented."
+            : code === "groq-truncated"
+              ? "The AI response was cut off before it finished, so it was discarded rather than shown incomplete. You can retry."
+              : code === "groq-invalid-response"
+                ? "The AI provider returned a response that did not match the required format, so it was discarded. No findings were shown."
+                : "The AI provider could not complete the analysis. You can retry. No result was invented.",
+        ...(retryAfterSeconds
+          ? [`The provider asked to wait about ${retryAfterSeconds} seconds before the next attempt.`]
+          : []),
+      ];
       await ctx.runMutation(internal.voice.internalSetAnalysis, {
         recordingId: args.recordingId,
         status: "FAILED",
         assessment: "UNABLE_TO_ASSESS",
-        error: message.slice(0, 200),
-        limitations: [
-          "The AI provider could not complete the analysis. You can retry. No result was invented.",
-        ],
+        error: code,
+        limitations,
+        provider: "groq",
+        model: currentGroqModel(),
+        runId,
       });
       return {
         transcriptionStatus: "COMPLETED",
         analysisStatus: "FAILED",
         assessment: "UNABLE_TO_ASSESS",
         providersRan,
+        state: "FAILED",
+        retryable,
+        ...(retryAfterSeconds
+          ? { retryAfterMs: retryAfterSeconds * 1000 }
+          : {}),
       };
+    }
+    } finally {
+      // Release the lease even when the action throws. If the action is killed
+      // outright, the lease expires on its own and a later retry can resume.
+      await ctx.runMutation(internal.voice.internalReleaseProcessingLease, {
+        recordingId: args.recordingId,
+        runId,
+      }).catch(() => undefined);
     }
   },
 });

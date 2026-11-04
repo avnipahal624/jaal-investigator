@@ -170,6 +170,33 @@ export function describeProcessingError(
   if (error === "no-api-key") {
     return "AI analysis isn’t configured right now, so no assessment was produced.";
   }
+  // Provider rate limits / outages are transient and retryable. The transcript
+  // (and the recording) are already saved, so say that instead of implying the
+  // whole submission failed.
+  if (error === "groq-rate-limited") {
+    return "The AI provider is rate-limiting requests right now. Your transcript is saved — try again in a moment.";
+  }
+  if (error === "groq-unavailable" || error === "groq-network") {
+    return "The AI provider is temporarily unreachable. Your transcript is saved — try again shortly.";
+  }
+  if (error === "groq-timeout") {
+    return "The AI provider took too long to respond. Your transcript is saved — try again.";
+  }
+  if (error === "groq-truncated") {
+    return "The AI response was cut off before it finished, so it was discarded rather than shown incomplete. You can retry.";
+  }
+  if (error === "groq-invalid-response" || error === "groq-empty-response") {
+    return "The AI provider returned an unusable response, so no findings were shown. You can retry — nothing was invented.";
+  }
+  if (error === "groq-auth" || error === "groq-rejected") {
+    return "AI analysis could not run because the provider rejected the request. No result was produced.";
+  }
+  if (/^stt-http-429$/.test(error) || /^stt-http-5\d\d$/.test(error)) {
+    return "Speech-to-text is temporarily unavailable (the provider was busy). The original recording is saved — try again.";
+  }
+  if (error === "stt-timeout" || error === "stt-network-error") {
+    return "Speech-to-text couldn’t reach the provider. Your recording is saved — check your connection and try again.";
+  }
   if (step === "analysis") {
     return "The AI analysis could not be completed. You can retry — no result was invented.";
   }

@@ -934,11 +934,13 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 function useIsInvestigator() {
-  // Server-side role check (users.role) is the single source of truth. The
-  // frontend never fabricates a consumer's role: if the account is not a
-  // stored investigator/admin, treat it as a consumer. A consumer never sees
-  // the investigator review queue or restricted forensic details.
-  return false;
+  // Server-side role (users.role) is the single source of truth. The client
+  // only mirrors it to choose which view to render; every mutation below is
+  // still role-checked and owner-scoped on the server. Signed-out and consumer
+  // accounts get the consumer view — never the investigator review controls.
+  const user = useQuery(api.users.currentUser);
+  const role = user?.role;
+  return role === "investigator" || role === "admin";
 }
 
 export default function VoiceIntakePage() {

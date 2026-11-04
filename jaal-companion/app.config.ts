@@ -31,6 +31,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       monochromeImage: "./assets/android-icon-monochrome.png",
     },
     predictiveBackGestureEnabled: false,
+    // JAAL only reads files the user picks through the system document picker
+    // (SAF) and writes to app-scoped storage, so the broad legacy storage
+    // permissions are not needed. Blocking them keeps the install footprint
+    // honest; nothing in the app reads shared external storage directly.
+    blockedPermissions: [
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+    ],
   },
   web: {
     favicon: "./assets/favicon.png",

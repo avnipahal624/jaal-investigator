@@ -92,6 +92,11 @@ export async function pickRecording(): Promise<PickRecordingResult> {
 
 export type UploadRecordingArgs = {
   file: VoiceFile;
+  /**
+   * Stable per-submission key. Retries reuse it, so a lost response cannot
+   * create a second report for the same upload.
+   */
+  idempotencyKey: string;
   generateUploadUrl: () => Promise<string>;
   createVoiceReport: (args: {
     storageId: string;
@@ -101,6 +106,7 @@ export type UploadRecordingArgs = {
     fileHash: string;
     consentAccepted: boolean;
     consentVersion: string;
+    idempotencyKey?: string;
     callerPhone?: string;
     claimedIdentity?: string;
     whatHappened?: string;
@@ -150,6 +156,7 @@ export async function uploadRecording(args: UploadRecordingArgs) {
     fileHash,
     consentAccepted: true,
     consentVersion: CONSENT_VERSION,
+    idempotencyKey: args.idempotencyKey,
     callerPhone: args.context?.callerPhone,
     claimedIdentity: args.context?.claimedIdentity,
     whatHappened: args.context?.whatHappened,

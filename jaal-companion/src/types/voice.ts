@@ -158,4 +158,14 @@ export type VoiceProcessingResult = {
   analysisStatus: AnalysisStatus;
   assessment: VoiceAssessment | null;
   providersRan: { transcription: string | null; analysis: string | null };
+  /** Whether work ran, was already done, or was refused by the lease. */
+  state?:
+    | "COMPLETED"
+    | "ALREADY_COMPLETE"
+    | "ALREADY_PROCESSING"
+    | "OWNER_BUSY"
+    | "NO_SPEECH"
+    | "FAILED";
+  retryable?: boolean;
+  retryAfterMs?: number;
 };

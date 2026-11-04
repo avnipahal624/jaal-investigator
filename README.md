@@ -261,7 +261,18 @@ create → message (operator or simulated) → analysis (tactics + intent + stra
 - **GROQ** — set `GROQ_API_KEY` (and optionally `GROQ_MODEL`, default `openai/gpt-oss-120b`) on the Convex deployment: `npx convex env set GROQ_API_KEY gsk_...`. Strategy, summary, intelligence modules, copilot, safety assistant, consumer content analysis and voice analysis all call Groq over its OpenAI-compatible chat API; the UI labels the engine "GROQ". Rows written before the migration keep their legacy `ANTHROPIC` label and still display as AI-assisted.
 - **SIMULATION** (default, no key required) — every action falls back to the deterministic rules engine and the UI is clearly labelled "Simulation mode — analysis engine".
 
-Every Groq call keeps its original contract: hard per-attempt timeout, one retry on transient statuses only, errors reduced to the HTTP status (never the key or provider body), per-owner AI budget, and server-side zod validation before any output is stored.
+Every Groq call shares one transport contract. Each attempt has a hard 25 s
+timeout; only transient failures (408/409/429/5xx/network) are retried, up to
+three attempts, with exponential backoff and jitter. A valid `Retry-After` is
+honoured instead of the local backoff, but a delay longer than 8 s fails fast
+with a `groq-rate-limited` status (and the requested wait) so an action is never
+held open waiting out a quota window. Auth and validation failures are never
+retried. A response cut off by the completion budget (`finish_reason: "length"`)
+is an error, never a "complete" answer, and errors are reduced to stable,
+content-free codes (never the key or provider body). Reasoning models get their
+intended answer budget plus 512 tokens of reasoning headroom rather than a flat
+floor, so small per-feature budgets stay small; server-side zod validation still
+gates every stored output.
 
 ## Recorded-call transcription (Groq Cloud)
 
@@ -291,8 +302,32 @@ decodes confidently is kept.
 
 To verify every AI workflow against Groq without touching case data, run
 `npx convex run aiSmoke:run`. It sends one synthetic, non-sensitive example
-through each production prompt and schema and reports only whether the provider
-answered and whether the output validated.
+through each production prompt and schema and reports whether the provider
+answered, whether the output validated, and the completion/reasoning token
+count. Run one workflow at a time (`'{"only":"voice-analysis"}'`) on a
+free-tier key: a ten-workflow burst can exhaust the per-minute token budget.
+
+## Voice intake reliability
+
+- **Submission is idempotent.** `voice.createVoiceReport` accepts an optional
+  client `idempotencyKey`; a retried tap, lost response or screen re-entry with
+  the same key returns the report that already exists. Reusing the same uploaded
+  blob also returns the existing report, and a storage id owned by another
+  account is rejected.
+- **Processing is single-flight.** A persisted lease (4 minutes, expiring on its
+  own if an action is killed) allows one run per recording and one heavy voice
+  pipeline per account. A duplicate tap gets `ALREADY_PROCESSING`/`OWNER_BUSY`
+  instead of a second provider call; a retry after a crash can resume once the
+  lease lapses, and stale `PROCESSING` flags are reset.
+- **Completed work is reused.** A stored machine transcript is never re-requested
+  or overwritten on retry, and a completed analysis is not recomputed. Typed
+  transcripts invalidate the analysis that described different text.
+- **Integrity is re-checked before analysis.** The stored blob must match both
+  the recorded SHA-256 and the declared byte size; otherwise nothing is analysed.
+  The hash proves consistency with the upload baseline, not who recorded it.
+- **Rate limits are honest.** A 429/5xx leaves the transcript saved, stores a
+  retryable status (`groq-rate-limited`, `groq-unavailable`, …) and shows
+  retry guidance — never a fabricated result and never a "success".
 
 Convex-side keys are never exposed to the browser bundle.
 

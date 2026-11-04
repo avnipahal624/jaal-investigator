@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Button } from "../../../components/ui/Button";
@@ -37,6 +37,7 @@ export function VoiceResultsScreen() {
 
   const [seekTo, setSeekTo] = useState<number | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const retryInFlight = useRef(false);
   const [deleting, setDeleting] = useState(false);
   const [manualTranscript, setManualTranscript] = useState("");
   const [manualSaving, setManualSaving] = useState(false);
@@ -52,7 +53,8 @@ export function VoiceResultsScreen() {
   );
 
   async function retry() {
-    if (!id) return;
+    if (!id || retryInFlight.current) return;
+    retryInFlight.current = true;
     setRetrying(true);
     setError(null);
     try {
@@ -60,6 +62,7 @@ export function VoiceResultsScreen() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Processing failed. Try again.");
     } finally {
+      retryInFlight.current = false;
       setRetrying(false);
     }
   }

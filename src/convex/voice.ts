@@ -16,32 +16,22 @@ import {
   getOwner,
   requireRole,
 } from "./lib/backend";
+import {
+  validateVoiceUpload,
+  normaliseIdempotencyKey,
+} from "./voiceIntake";
 
 // ---------------------------------------------------------------------------
 // Limits + allowed audio formats (enforced server-side regardless of client).
 // ---------------------------------------------------------------------------
 
-/** Max uploaded recording size (25 MB) — a normal call recording fits. */
-export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+// Upload limits and the MIME allow-list live in ./voiceIntake (pure, tested).
+export { ALLOWED_AUDIO_MIME, MAX_AUDIO_BYTES } from "./voiceIntake";
 
-/**
- * MIME types accepted for a call recording. Both the bare types and common
- * container aliases are allowed so a phone-exported file still validates.
- */
-export const ALLOWED_AUDIO_MIME = [
-  "audio/mpeg", // mp3
-  "audio/mp3",
-  "audio/wav",
-  "audio/x-wav",
-  "audio/wave",
-  "audio/mp4", // m4a /AAC in MP4
-  "audio/m4a",
-  "audio/x-m4a",
-  "audio/aac",
-  "audio/ogg",
-  "audio/webm",
-  "audio/amr",
-] as const;
+/** How long one processing run may hold the single-flight lease. */
+export const PROCESSING_LEASE_MS = 240_000;
+/** At most one heavy voice pipeline per account at a time. */
+export const MAX_CONCURRENT_PROCESSING_PER_OWNER = 1;
 
 const MAX_TRANSCRIPT_CHARS = 60_000;
 
@@ -185,6 +175,32 @@ function toConsumerRecording(rec: Doc<"voice_recordings">) {
   };
 }
 
+/**
+ * Response for a submission that already exists. Returning the ORIGINAL ids
+ * means a retried tap, network retry or screen re-entry lands on the same
+ * report and the same evidence — never a second report.
+ */
+async function reportReplay(
+  ctx: MutationCtx,
+  rec: Doc<"voice_recordings">,
+) {
+  const inv = await ctx.db.get(rec.investigationId);
+  return {
+    recordingId: rec._id as string,
+    reportId: rec.investigationId as string,
+    caseId: rec.caseId,
+    report: {
+      _id: rec.investigationId as string,
+      caseId: rec.caseId,
+      category: inv?.category ?? "Voice scam",
+      title: inv?.title ?? "Voice call scam",
+      status: inv?.status ?? "active",
+      createdAt: inv?.createdAt ?? rec.createdAt,
+    },
+    replayed: true,
+  };
+}
+
 /** Investigator projection — adds intake/review state + provenance. */
 function toInvestigatorRecording(rec: Doc<"voice_recordings">) {
   return {
@@ -256,32 +272,47 @@ export const createVoiceReport = mutation({
 
     /** Optional self-reported transcript the consumer already has. */
     consumerTranscript: v.optional(v.string()),
+    /** Client-generated submission key — makes retries idempotent. */
+    idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const owner = await requireRole(ctx, ["consumer"]);
 
-    if (!args.consentAccepted) {
-      throw new Error(
-        "Consent is required before a recording can be uploaded and analysed.",
-      );
+    // A retried submission returns the report it already created. Checked
+    // before validation so a retry with a slightly different payload (e.g. a
+    // re-read file size) still resolves to the same report.
+    const idempotencyKey = normaliseIdempotencyKey(args.idempotencyKey);
+    if (idempotencyKey) {
+      const existing = await ctx.db
+        .query("voice_recordings")
+        .withIndex("by_owner_idempotency", (q) =>
+          q.eq("owner", owner).eq("idempotencyKey", idempotencyKey),
+        )
+        .first();
+      if (existing) return await reportReplay(ctx, existing);
     }
 
+    const uploadProblem = validateVoiceUpload(args);
+    if (uploadProblem) throw new Error(uploadProblem);
     const mime = args.mimeType.toLowerCase();
-    if (!(ALLOWED_AUDIO_MIME as readonly string[]).includes(mime)) {
-      throw new Error(
-        `Unsupported audio format (${args.mimeType}). Please upload MP3, WAV, M4A, AAC, OGG, WebM or AMR.`,
-      );
-    }
-    if (args.sizeBytes <= 0) {
-      throw new Error("The uploaded file appears to be empty.");
-    }
-    if (args.sizeBytes > MAX_AUDIO_BYTES) {
-      throw new Error(
-        `Recording is too large (${(args.sizeBytes / 1024 / 1024).toFixed(1)} MB). The maximum is ${MAX_AUDIO_BYTES / 1024 / 1024} MB.`,
-      );
-    }
-    if (!/^[0-9a-f]{64}$/.test(args.fileHash)) {
-      throw new Error("Invalid file hash format.");
+
+    // Re-submitting the same uploaded blob must not create a second report.
+    // A storage id that already belongs to another account is rejected: one
+    // consumer can never attach (or claim) another consumer's evidence.
+    const storageId = args.storageId.trim();
+    if (!storageId) throw new Error("The upload reference is missing.");
+    const reuse = await ctx.db
+      .query("voice_recordings")
+      .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+      .first();
+    if (reuse) {
+      if (reuse.owner !== owner) {
+        throw new Error("That upload belongs to another account.");
+      }
+      if (idempotencyKey && !reuse.idempotencyKey) {
+        await ctx.db.patch(reuse._id, { idempotencyKey, updatedAt: Date.now() });
+      }
+      return await reportReplay(ctx, reuse);
     }
 
     const fileName = assertLength(args.fileName, 200, "File name");
@@ -351,10 +382,11 @@ export const createVoiceReport = mutation({
       owner,
       caseId,
 
-      storageId: args.storageId,
+      storageId,
       fileName,
       mimeType: mime,
       sizeBytes: args.sizeBytes,
+      idempotencyKey,
       fileHash: args.fileHash,
       hashAlgorithm: "SHA-256",
       durationSeconds: args.durationSeconds,
@@ -423,6 +455,16 @@ export const submitConsumerTranscript = mutation({
         "A machine transcript already exists for this recording and cannot be replaced.",
       );
     }
+    if (rec.transcription.status === "PROCESSING") {
+      throw new Error(
+        "This recording is still being transcribed. Add your text once it finishes.",
+      );
+    }
+    if (typeof rec.processLeaseUntil === "number" && rec.processLeaseUntil > Date.now()) {
+      throw new Error(
+        "This recording is still being analysed. Try again in a moment.",
+      );
+    }
     const transcript = assertLength(
       args.transcript.trim(),
       MAX_TRANSCRIPT_CHARS,
@@ -433,9 +475,11 @@ export const submitConsumerTranscript = mutation({
     await ctx.db.patch(rec._id, {
       transcript,
       transcriptSource: "CONSUMER_PROVIDED",
-      // Re-open transcription as complete (self-reported) but leave analysis
-      // for the action to (re)run.
+      // Re-open transcription as complete (self-reported). Any earlier
+      // analysis described DIFFERENT text, so it is invalidated rather than
+      // left on screen as if it still applied; the action will re-run it.
       transcription: { status: "COMPLETED" as TranscriptionStatus, at: now },
+      analysis: { status: "NOT_STARTED" as AnalysisStatus },
       updatedAt: now,
     });
     return { ok: true };
@@ -489,6 +533,10 @@ export const internalGetRecording = internalQuery({
       transcriptSource: rec.transcriptSource ?? null,
       transcriptSegments: rec.transcriptSegments ?? null,
       transcriptLanguage: rec.transcription?.language ?? null,
+      transcriptionStatus: rec.transcription.status,
+      analysisStatus: rec.analysis.status,
+      assessment: rec.analysis.assessment ?? null,
+      sizeBytes: rec.sizeBytes,
       callerPhone: rec.callerPhone ?? null,
       claimedIdentity: rec.claimedIdentity ?? null,
       moneyRequested: rec.moneyRequested ?? false,
@@ -499,10 +547,101 @@ export const internalGetRecording = internalQuery({
   },
 });
 
+/**
+ * Acquire the single-flight processing lease.
+ *
+ * One run per recording AND one heavy voice pipeline per owner. A lease that
+ * outlives its action expires, so a retry after an action restart resumes
+ * instead of being blocked forever. Stale PROCESSING flags from a killed run
+ * are reset here — completed transcripts/analyses are never touched.
+ */
+export const internalAcquireProcessingLease = internalMutation({
+  args: {
+    recordingId: v.id("voice_recordings"),
+    runId: v.string(),
+    leaseMs: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const rec = await loadOwnedRecording(ctx, args.recordingId);
+    const now = Date.now();
+    const leaseMs = Math.min(
+      Math.max(Math.round(args.leaseMs ?? PROCESSING_LEASE_MS), 30_000),
+      600_000,
+    );
+
+    if (
+      typeof rec.processLeaseUntil === "number" &&
+      rec.processLeaseUntil > now
+    ) {
+      return {
+        acquired: false as const,
+        reason: "in-progress" as const,
+        leaseUntil: rec.processLeaseUntil,
+      };
+    }
+
+    const siblings = await ctx.db
+      .query("voice_recordings")
+      .withIndex("by_owner", (q) => q.eq("owner", rec.owner))
+      .collect();
+    const busy = siblings.find(
+      (r) =>
+        r._id !== rec._id &&
+        typeof r.processLeaseUntil === "number" &&
+        r.processLeaseUntil > now,
+    );
+    if (busy && MAX_CONCURRENT_PROCESSING_PER_OWNER <= 1) {
+      return {
+        acquired: false as const,
+        reason: "owner-busy" as const,
+        leaseUntil: busy.processLeaseUntil as number,
+      };
+    }
+
+    const patch: Record<string, unknown> = {
+      processLeaseUntil: now + leaseMs,
+      processRunId: args.runId,
+      updatedAt: now,
+    };
+    // Reset only in-flight markers from a run that died mid-flight.
+    if (rec.transcription.status === "PROCESSING") {
+      patch.transcription = { status: "NOT_STARTED" as TranscriptionStatus };
+    }
+    if (rec.analysis.status === "PROCESSING") {
+      patch.analysis = { status: "NOT_STARTED" as AnalysisStatus };
+    }
+    await ctx.db.patch(rec._id, patch);
+    return {
+      acquired: true as const,
+      reason: null,
+      leaseUntil: now + leaseMs,
+    };
+  },
+});
+
+/** Release the lease, but only for the run that still holds it. */
+export const internalReleaseProcessingLease = internalMutation({
+  args: { recordingId: v.id("voice_recordings"), runId: v.string() },
+  handler: async (ctx, args) => {
+    const rec = await ctx.db.get(args.recordingId);
+    if (!rec || rec.processRunId !== args.runId) return { released: false };
+    await ctx.db.patch(rec._id, {
+      processLeaseUntil: undefined,
+      processRunId: undefined,
+      updatedAt: Date.now(),
+    });
+    return { released: true };
+  },
+});
+
 /** Mark a recording as transcribing (optimistic UI). */
 export const internalMarkTranscribing = internalMutation({
-  args: { recordingId: v.id("voice_recordings") },
+  args: { recordingId: v.id("voice_recordings"), runId: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    if (args.runId) {
+      const rec = await ctx.db.get(args.recordingId);
+      if (!rec || rec.processRunId !== args.runId) return;
+    }
     await ctx.db.patch(args.recordingId, {
       transcription: { status: "PROCESSING" as TranscriptionStatus },
       updatedAt: Date.now(),
@@ -534,8 +673,13 @@ export const internalSetTranscription = internalMutation({
         }),
       ),
     ),
+    runId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.runId) {
+      const current = await ctx.db.get(args.recordingId);
+      if (!current || current.processRunId !== args.runId) return;
+    }
     const now = Date.now();
     const patch: Record<string, unknown> = {
       transcription: {
@@ -558,8 +702,12 @@ export const internalSetTranscription = internalMutation({
 
 /** Mark analysis as processing (optimistic UI). */
 export const internalMarkAnalysing = internalMutation({
-  args: { recordingId: v.id("voice_recordings") },
+  args: { recordingId: v.id("voice_recordings"), runId: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    if (args.runId) {
+      const rec = await ctx.db.get(args.recordingId);
+      if (!rec || rec.processRunId !== args.runId) return;
+    }
     await ctx.db.patch(args.recordingId, {
       analysis: { status: "PROCESSING" as AnalysisStatus },
       updatedAt: Date.now(),
@@ -588,8 +736,13 @@ export const internalSetAnalysis = internalMutation({
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
     error: v.optional(v.string()),
+    runId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.runId) {
+      const current = await ctx.db.get(args.recordingId);
+      if (!current || current.processRunId !== args.runId) return;
+    }
     const now = Date.now();
     await ctx.db.patch(args.recordingId, {
       analysis: {
@@ -775,8 +928,20 @@ export const setIntakeStatus = mutation({
       notes.push({
         at: now,
         by: identity?.subject ?? "investigator",
-        kind: "status",
+        kind: "note",
         text: assertLength(args.note, 1_000, "Note"),
+      });
+    }
+    // Audit every actual transition, even when no note was supplied. This is
+    // append-only metadata; the intake row and the evidence are untouched.
+    if (rec.intakeStatus !== args.status) {
+      notes.push({
+        at: now,
+        by: identity?.subject ?? "investigator",
+        kind: "status",
+        text: `${rec.intakeStatus} → ${args.status}`,
+        from: rec.intakeStatus,
+        to: args.status,
       });
     }
     await ctx.db.patch(rec._id, {

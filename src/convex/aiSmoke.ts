@@ -24,7 +24,13 @@ import {
   extractJson,
   sanitize,
 } from "./ai";
-import { callGroq, currentGroqModel } from "./groqClient";
+import {
+  callGroq,
+  currentGroqModel,
+  describeGroqError,
+  groqRetryAfterSeconds,
+  type GroqUsage,
+} from "./groqClient";
 import {
   COPILOT_SYSTEM,
   CORRELATION_SYSTEM,
@@ -75,6 +81,10 @@ type Outcome = {
   schemaIssues?: { path: string; code: string }[];
   /** Only with debug: start of the synthetic-sample response. */
   preview?: string;
+  /** Token accounting — the only way to see whether the budget was sensible. */
+  usage?: { completionTokens: number | null; reasoningTokens: number | null };
+  /** Provider-requested wait, when it rate-limited us. */
+  retryAfterSeconds?: number;
 };
 
 function failure(
@@ -82,14 +92,16 @@ function failure(
   startedAt: number,
   error: unknown,
 ): Outcome {
-  const status = (error as { status?: number }).status;
+  const retryAfterSeconds = groqRetryAfterSeconds(error);
   return {
     workflow,
     status: "failed",
     schemaValid: null,
     chars: 0,
     latencyMs: Date.now() - startedAt,
-    error: status ? `http-${status}` : "provider-error",
+    // Stable, content-free classification (rate limit, timeout, outage...).
+    error: describeGroqError(error),
+    ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
   };
 }
 
@@ -108,10 +120,14 @@ async function jsonWorkflow(
   debug = false,
 ): Promise<Outcome> {
   const startedAt = Date.now();
+  const usage: { current: GroqUsage | null } = { current: null };
   try {
     const text = await callGroq(key, system, user, maxTokens, {
       json: true,
       temperature: 0,
+      onUsage: (u) => {
+        usage.current = u;
+      },
     });
     if (!text) {
       return {
@@ -131,6 +147,14 @@ async function jsonWorkflow(
       chars: text.trim().length,
       latencyMs: Date.now() - startedAt,
       error: parsed.success ? null : "invalid-output",
+      ...(usage.current
+        ? {
+            usage: {
+              completionTokens: usage.current.completionTokens,
+              reasoningTokens: usage.current.reasoningTokens,
+            },
+          }
+        : {}),
       // Schema paths only — no model text. Useful for fixing a prompt.
       ...(debug && !parsed.success && parsed.error
         ? {
@@ -157,9 +181,13 @@ async function textWorkflow(
   maxTokens: number,
 ): Promise<Outcome> {
   const startedAt = Date.now();
+  const usage: { current: GroqUsage | null } = { current: null };
   try {
     const text = await callGroq(key, system, user, maxTokens, {
       temperature: 0,
+      onUsage: (u) => {
+        usage.current = u;
+      },
     });
     return {
       workflow,
@@ -168,6 +196,14 @@ async function textWorkflow(
       chars: text?.trim().length ?? 0,
       latencyMs: Date.now() - startedAt,
       error: text?.trim() ? null : "empty-response",
+      ...(usage.current
+        ? {
+            usage: {
+              completionTokens: usage.current.completionTokens,
+              reasoningTokens: usage.current.reasoningTokens,
+            },
+          }
+        : {}),
     };
   } catch (err) {
     return failure(workflow, startedAt, err);

@@ -498,6 +498,19 @@ const schema = defineSchema(
         v.literal("ACCEPTED"),
         v.literal("CLOSED"),
       ),
+      /**
+       * Client-generated key for one submission attempt. A retried tap, network
+       * retry or screen re-entry with the same key returns the report that
+       * already exists instead of creating a second one.
+       */
+      idempotencyKey: v.optional(v.string()),
+      /**
+       * Single-flight lease held by the processing action. Set while work runs;
+       * expires on its own if the action is killed, so a later retry can resume
+       * instead of being blocked forever. Never exposed to consumers.
+       */
+      processLeaseUntil: v.optional(v.number()),
+      processRunId: v.optional(v.string()),
       linkedInvestigationId: v.optional(v.id("investigations")),
       reviewedBy: v.optional(v.string()),
       reviewedAt: v.optional(v.number()),
@@ -511,7 +524,9 @@ const schema = defineSchema(
     })
       .index("by_owner", ["owner"])
       .index("by_owner_case", ["owner", "caseId"])
-      .index("by_investigation", ["investigationId"]),
+      .index("by_investigation", ["investigationId"])
+      .index("by_storage", ["storageId"])
+      .index("by_owner_idempotency", ["owner", "idempotencyKey"]),
 
     /** Per-user settings (appearance / investigation / simulation). */
     settings: defineTable({
