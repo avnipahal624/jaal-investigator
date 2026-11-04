@@ -272,6 +272,12 @@ generic `STT_API_KEY`) on the deployment:
 the stored provider label is derived from the endpoint actually called. Without
 a key, transcription returns UNAVAILABLE rather than inventing a transcript.
 
+To verify a deployment without uploading a recording, run
+`npx convex run sttDiagnostics:check`. The internal-only action sends a
+public-domain speech sample through the same upload path and reports the
+provider, whether authentication passed, and how many reference words were
+recognised. It never returns the key or the provider's raw response.
+
 Convex-side keys are never exposed to the browser bundle.
 
 ## Security, privacy & evidence-integrity notes
