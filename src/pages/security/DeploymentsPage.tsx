@@ -2,6 +2,7 @@ import {
   ActionButton,
   Chip,
   EmptyState,
+  LoadingState,
   PageHeader,
   Panel,
 } from "@/components/security/ui";
@@ -55,6 +56,10 @@ export default function DeploymentsPage() {
 
   const latest = deployments?.[0] ?? null;
   const changes = (latest?.changes ?? []) as Change[];
+
+  if (deployments === undefined || investigations === undefined) {
+    return <LoadingState label="Loading deployment intelligence" />;
+  }
 
   return (
     <>
@@ -111,7 +116,7 @@ export default function DeploymentsPage() {
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-mono text-[10px] text-[#d7e2ee]">
+                          <p className="font-mono text-[10px] text-[#E5EDF5]">
                             {deployment.version}
                           </p>
                           <Chip
@@ -212,7 +217,7 @@ export default function DeploymentsPage() {
                   ].map(([label, value]) => (
                     <div key={String(label)} className="flex items-center justify-between">
                       <span className="text-[10px] text-[#9FB3C8]">{label}</span>
-                      <span className="font-mono text-[12px] text-[#d7e2ee]">{value}</span>
+                      <span className="font-mono text-[12px] text-[#E5EDF5]">{value}</span>
                     </div>
                   ))}
                   <div className="border-t border-[#24344F] pt-3">
@@ -254,7 +259,7 @@ export default function DeploymentsPage() {
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <RefreshCw className="mt-0.5 size-3.5 shrink-0 text-[#64B5F6]" />
+                  <RefreshCw className="mt-0.5 size-3.5 shrink-0 text-[#9FB3C8]" />
                   <p>
                     Deployment IDs are idempotent. Replaying the same webhook returns the
                     existing investigation instead of creating duplicates.

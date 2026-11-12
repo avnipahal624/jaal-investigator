@@ -43,7 +43,7 @@ type GraphEdge = { source: string; target: string; label: string };
 const CLASS_COLORS: Record<string, string> = {
   ACTIVE: "#34D399",
   ZOMBIE: "#F5B942",
-  SHADOW: "#B383F5",
+  SHADOW: "#F5B942",
   UNKNOWN: "#9FB3C8",
 };
 
@@ -180,18 +180,18 @@ export default function KnowledgeGraphPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Find an endpoint…"
-                className="h-7 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[10px] text-[#d7e2ee] placeholder:text-[#4d647a] focus:border-[#2DD4BF]/60 focus:outline-none"
+                className="h-7 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[10px] text-[#E5EDF5] placeholder:text-[#6B8199] focus:border-[#2DD4BF]/60 focus:outline-none"
               />
             </div>
             <div className="flex flex-wrap items-center gap-3 font-mono text-[8px] uppercase tracking-[0.08em] text-[#7E93A8]">
               <Legend color="#2DD4BF" label="Application" />
-              <Legend color="#64B5F6" label="Service" />
+              <Legend color="#9FB3C8" label="Service" />
               <Legend color="#34D399" label="Endpoint" />
-              <Legend color="#B383F5" label="Flow" />
+              <Legend color="#F5B942" label="Flow" />
               <Legend color="#F87171" label="Finding" />
             </div>
           </div>
-          <div className="relative overflow-x-auto bg-[#080f1a]">
+          <div className="relative overflow-x-auto bg-[#0A1526]">
             <svg
               viewBox={`0 0 ${positions.width} ${positions.height}`}
               className="h-[620px] w-full min-w-[1000px]"
@@ -335,12 +335,12 @@ export default function KnowledgeGraphPage() {
                         width="124"
                         height="28"
                         fill="#0c1726"
-                        stroke={isSelected ? "#64B5F6" : "#2c415a"}
+                        stroke={isSelected ? "#9FB3C8" : "#2c415a"}
                       />
                       <text
                         x={x - 52}
                         y={y + 3}
-                        fill="#9fc7ef"
+                        fill="#2DD4BF"
                         fontSize="8"
                         fontFamily="monospace"
                       >
@@ -362,14 +362,14 @@ export default function KnowledgeGraphPage() {
                         y={y - 16}
                         width="132"
                         height="32"
-                        fill="#17122a"
-                        stroke={isSelected ? "#B383F5" : "#3d2d5c"}
+                        fill="#152238"
+                        stroke={isSelected ? "#F5B942" : "#F5B942"}
                         strokeDasharray="3 2"
                       />
                       <text
                         x={x - 56}
                         y={y + 3}
-                        fill="#c7b2ef"
+                        fill="#F5B942"
                         fontSize="8"
                         fontFamily="monospace"
                       >
@@ -385,7 +385,7 @@ export default function KnowledgeGraphPage() {
                     onClick={() => setSelectedId(node.id)}
                     className="cursor-pointer"
                   >
-                    <circle cx={x - 38} cy={y} r="7" fill="#2a1119" stroke="#F87171" />
+                    <circle cx={x - 38} cy={y} r="7" fill="#152238" stroke="#F87171" />
                     <text
                       x={x - 24}
                       y={y + 3}
@@ -421,7 +421,7 @@ export default function KnowledgeGraphPage() {
                   <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                     {selected.type}
                   </p>
-                  <p className="mt-1 break-all text-[12px] font-medium text-[#d7e2ee]">
+                  <p className="mt-1 break-all text-[12px] font-medium text-[#E5EDF5]">
                     {selected.label}
                   </p>
                 </div>
@@ -498,11 +498,11 @@ export default function KnowledgeGraphPage() {
                   <p>Application → service → endpoint relationships come from observed traffic.</p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <Layers3 className="mt-0.5 size-3.5 shrink-0 text-[#B383F5]" />
+                  <Layers3 className="mt-0.5 size-3.5 shrink-0 text-[#F5B942]" />
                   <p>Endpoint → business flow edges show which travel workflow is affected.</p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <GitBranch className="mt-0.5 size-3.5 shrink-0 text-[#64B5F6]" />
+                  <GitBranch className="mt-0.5 size-3.5 shrink-0 text-[#9FB3C8]" />
                   <p>Deployment changes are recorded on the endpoint and investigation records.</p>
                 </div>
                 <div className="flex items-start gap-2">

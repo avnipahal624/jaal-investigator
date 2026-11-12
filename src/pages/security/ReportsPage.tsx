@@ -2,6 +2,7 @@ import {
   ActionButton,
   Chip,
   EmptyState,
+  LoadingState,
   PageHeader,
   Panel,
 } from "@/components/security/ui";
@@ -14,6 +15,10 @@ import { Link } from "react-router";
 export default function ReportsPage() {
   const reports = useQuery(api.dast.reports);
   const findings = useQuery(api.dast.findings);
+
+  if (reports === undefined || findings === undefined) {
+    return <LoadingState label="Loading report archive" />;
+  }
 
   return (
     <>
@@ -71,7 +76,7 @@ export default function ReportsPage() {
                 </Chip>
               </div>
               <div className="flex-1 p-4">
-                <p className="text-[12px] font-medium leading-snug text-[#d7e2ee]">
+                <p className="text-[12px] font-medium leading-snug text-[#E5EDF5]">
                   {report.title}
                 </p>
                 <p className="mt-2 text-[10px] leading-relaxed text-[#9FB3C8]">
@@ -82,7 +87,7 @@ export default function ReportsPage() {
                     <p className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#6B8199]">
                       Generated
                     </p>
-                    <p className="mt-0.5 text-[9px] text-[#a6b7c9]">
+                    <p className="mt-0.5 text-[9px] text-[#C7D5E5]">
                       {relativeTime(report.generatedAt)}
                     </p>
                   </div>

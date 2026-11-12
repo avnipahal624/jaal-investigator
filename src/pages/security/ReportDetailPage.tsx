@@ -1,4 +1,4 @@
-import { ActionButton, Chip, PageHeader } from "@/components/security/ui";
+import { ActionButton, Chip, LoadingState, PageHeader } from "@/components/security/ui";
 import { MarkdownView } from "@/components/security/MarkdownView";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -23,7 +23,7 @@ export default function ReportDetailPage() {
   );
 
   if (report === undefined) {
-    return <div className="py-16 text-center text-[11px] text-[#9FB3C8]">Loading report…</div>;
+    return <LoadingState label="Loading report snapshot" />;
   }
   if (!report) {
     return (
@@ -118,8 +118,8 @@ export default function ReportDetailPage() {
         </div>
       </div>
 
-      <div className="security-report-print mx-auto max-w-[900px] border border-[#24344F] bg-[#0c1521] p-6 sm:p-8">
-        <div className="mb-6 flex items-center justify-between border-b border-[#1e3044] pb-4">
+      <div className="security-report-print mx-auto max-w-[900px] border border-[#24344F] bg-[#0F1B2D] p-6 sm:p-8">
+        <div className="mb-6 flex items-center justify-between border-b border-[#2A3B55] pb-4">
           <div className="flex items-center gap-2.5">
             <div className="flex size-8 items-center justify-center border border-[#2DD4BF]/40 bg-[#2DD4BF]/10">
               <span className="font-mono text-[10px] font-bold text-[#2DD4BF]">JA</span>
@@ -137,7 +137,7 @@ export default function ReportDetailPage() {
           </div>
         </div>
         <MarkdownView markdown={report.markdown} />
-        <div className="mt-8 flex items-center justify-between border-t border-[#1e3044] pt-3 font-mono text-[7px] uppercase tracking-[0.1em] text-[#6B8199]">
+        <div className="mt-8 flex items-center justify-between border-t border-[#2A3B55] pt-3 font-mono text-[7px] uppercase tracking-[0.1em] text-[#6B8199]">
           <span>Owner-scoped · sanitized evidence · no external targets</span>
           <span className="flex items-center gap-1">
             <Download className="size-3" /> {safeName}.pdf via browser print

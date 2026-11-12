@@ -35,7 +35,7 @@ export function Panel({
         <header className="flex items-start justify-between gap-3 border-b border-[#24344F] px-4 py-3">
           <div className="min-w-0">
             {eyebrow && (
-              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#5f7692]">
+              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#7E93A8]">
                 {eyebrow}
               </p>
             )}
@@ -77,7 +77,7 @@ export function Stat({
   return (
     <div className="relative border border-[#24344F] bg-[#152238] p-3.5">
       <div className="flex items-start justify-between gap-2">
-        <p className="font-mono text-[9px] uppercase tracking-[0.17em] text-[#6f849c]">
+        <p className="font-mono text-[9px] uppercase tracking-[0.17em] text-[#7E93A8]">
           {label}
         </p>
         {icon && <span className="text-[#6B8199]">{icon}</span>}
@@ -85,7 +85,7 @@ export function Stat({
       <p className={cn("mt-2 text-2xl font-semibold tabular-nums tracking-tight", toneClass)}>
         {value}
       </p>
-      {hint && <p className="mt-1 text-[10px] leading-relaxed text-[#6f849c]">{hint}</p>}
+      {hint && <p className="mt-1 text-[10px] leading-relaxed text-[#7E93A8]">{hint}</p>}
       <span className="absolute bottom-0 left-0 h-px w-8 bg-[#2DD4BF]/50" />
     </div>
   );
@@ -108,9 +108,9 @@ export function Chip({
     critical: "border-[#F87171]/40 bg-[#F87171]/10 text-[#F87171]",
     high: "border-[#F5B942]/40 bg-[#F5B942]/10 text-[#F5B942]",
     medium: "border-[#F5B942]/40 bg-[#F5B942]/10 text-[#F5B942]",
-    low: "border-[#64B5F6]/40 bg-[#64B5F6]/10 text-[#64B5F6]",
+    low: "border-[#9FB3C8]/40 bg-[#9FB3C8]/10 text-[#9FB3C8]",
     success: "border-[#34D399]/40 bg-[#34D399]/10 text-[#34D399]",
-    violet: "border-[#B383F5]/40 bg-[#B383F5]/10 text-[#B383F5]",
+    violet: "border-[#F5B942]/40 bg-[#F5B942]/10 text-[#F5B942]",
   }[tone];
   return (
     <span
@@ -174,7 +174,7 @@ export function FindingStatusBadge({ status }: { status: string }) {
 export function MethodBadge({ method }: { method: string }) {
   const tone =
     method === "GET"
-      ? "text-[#64B5F6] border-[#64B5F6]/40 bg-[#64B5F6]/10"
+      ? "text-[#9FB3C8] border-[#9FB3C8]/40 bg-[#9FB3C8]/10"
       : method === "POST"
         ? "text-[#34D399] border-[#34D399]/40 bg-[#34D399]/10"
         : "text-[#F5B942] border-[#F5B942]/40 bg-[#F5B942]/10";
@@ -288,7 +288,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-[280px] flex-col items-center justify-center border border-dashed border-[#26384f] bg-[#0F1B2D]/60 px-6 py-12 text-center">
+    <div className="flex min-h-[280px] flex-col items-center justify-center border border-dashed border-[#2A3B55] bg-[#0F1B2D]/60 px-6 py-12 text-center">
       <div className="mb-4 flex size-11 items-center justify-center border border-[#2DD4BF]/30 bg-[#2DD4BF]/8 text-[#2DD4BF]">
         {icon}
       </div>
@@ -302,6 +302,101 @@ export function EmptyState({
 export function SeverityDot({ severity }: { severity: string }) {
   const color = SEVERITY_COLOR[severity as DastSeverity] ?? "#9FB3C8";
   return <span className="size-1.5 rounded-full" style={{ backgroundColor: color }} />;
+}
+
+export function LoadingState({
+  label = "Loading security data",
+  rows = 5,
+}: {
+  label?: string;
+  rows?: number;
+}) {
+  return (
+    <div role="status" aria-live="polite" aria-label={label} className="space-y-2.5">
+      <div className="h-3 w-40 animate-pulse bg-[#24344F]" />
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: Math.min(4, rows) }).map((_, index) => (
+          <div key={index} className="h-20 animate-pulse border border-[#24344F] bg-[#152238]" />
+        ))}
+      </div>
+      <div className="space-y-2 border border-[#24344F] bg-[#152238] p-3">
+        {Array.from({ length: rows }).map((_, index) => (
+          <div key={index} className="h-9 animate-pulse border border-[#1B2C45] bg-[#0F1B2D]" />
+        ))}
+      </div>
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
+
+export function ErrorState({
+  title = "Security data could not be loaded",
+  body,
+  action,
+}: {
+  title?: string;
+  body: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex min-h-[220px] flex-col items-center justify-center border border-[#F87171]/40 bg-[#F87171]/5 px-6 py-10 text-center"
+    >
+      <h3 className="text-sm font-semibold text-[#E5EDF5]">{title}</h3>
+      <p className="mt-2 max-w-lg text-[11px] leading-relaxed text-[#9FB3C8]">{body}</p>
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
+}
+
+export function Pagination({
+  page,
+  pageCount,
+  onPageChange,
+  total,
+  pageSize,
+}: {
+  page: number;
+  pageCount: number;
+  onPageChange: (page: number) => void;
+  total: number;
+  pageSize: number;
+}) {
+  if (total <= pageSize) return null;
+  const start = total === 0 ? 0 : page * pageSize + 1;
+  const end = Math.min(total, (page + 1) * pageSize);
+  return (
+    <nav
+      aria-label="Pagination"
+      className="flex flex-col items-center justify-between gap-2 border-t border-[#24344F] px-3 py-2.5 sm:flex-row"
+    >
+      <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E93A8]">
+        {start}–{end} of {total}
+      </p>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(0, page - 1))}
+          disabled={page === 0}
+          className="h-7 border border-[#2A3B55] px-2.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[#9FB3C8] disabled:opacity-35"
+        >
+          Previous
+        </button>
+        <span className="px-1 font-mono text-[8px] text-[#7E93A8]">
+          {page + 1} / {pageCount}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(pageCount - 1, page + 1))}
+          disabled={page >= pageCount - 1}
+          className="h-7 border border-[#2A3B55] px-2.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[#9FB3C8] disabled:opacity-35"
+        >
+          Next
+        </button>
+      </div>
+    </nav>
+  );
 }
 
 export function ConfirmDialog({

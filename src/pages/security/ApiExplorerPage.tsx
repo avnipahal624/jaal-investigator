@@ -3,8 +3,10 @@ import {
   Chip,
   ClassificationBadge,
   EmptyState,
+  LoadingState,
   MethodBadge,
   PageHeader,
+  Pagination,
   SeverityBadge,
 } from "@/components/security/ui";
 import { api } from "@/convex/_generated/api";
@@ -40,6 +42,8 @@ export default function ApiExplorerPage() {
   const [classification, setClassification] = useState("ALL");
   const [service, setService] = useState("ALL");
   const [selected, setSelected] = useState<Doc<"dastEndpoints"> | null>(null);
+  const [page, setPage] = useState(0);
+  const pageSize = 10;
 
   const services = useMemo(
     () => Array.from(new Set((endpoints ?? []).map((endpoint) => endpoint.service))).sort(),
@@ -123,6 +127,14 @@ export default function ApiExplorerPage() {
     };
   }, [endpoints]);
 
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visibleRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+
+  if (endpoints === undefined) {
+    return <LoadingState label="Loading inferred API inventory" />;
+  }
+
   return (
     <>
       <PageHeader
@@ -147,7 +159,7 @@ export default function ApiExplorerPage() {
         <FilterStat label="Discovered" value={counts.total} />
         <FilterStat label="Active" value={counts.active} tone="text-[#34D399]" />
         <FilterStat label="Zombie" value={counts.zombie} tone="text-[#F5B942]" />
-        <FilterStat label="Shadow" value={counts.shadow} tone="text-[#B383F5]" />
+        <FilterStat label="Shadow" value={counts.shadow} tone="text-[#F5B942]" />
       </div>
 
       <div className="mt-4 border border-[#24344F] bg-[#152238]">
@@ -158,7 +170,7 @@ export default function ApiExplorerPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Filter by path, service, flow or auth…"
-              className="h-8 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[11px] text-[#d7e2ee] placeholder:text-[#4d647a] focus:border-[#2DD4BF]/60 focus:outline-none"
+              className="h-8 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[11px] text-[#E5EDF5] placeholder:text-[#6B8199] focus:border-[#2DD4BF]/60 focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap gap-2">
@@ -211,7 +223,7 @@ export default function ApiExplorerPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left">
               <thead>
-                <tr className="border-b border-[#24344F] bg-[#0c1521]">
+                <tr className="border-b border-[#24344F] bg-[#0F1B2D]">
                   {[
                     "Method",
                     "Path",
@@ -233,7 +245,7 @@ export default function ApiExplorerPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((endpoint) => (
+                {visibleRows.map((endpoint) => (
                   <tr
                     key={endpoint._id}
                     onClick={() => setSelected(endpoint)}
@@ -245,7 +257,7 @@ export default function ApiExplorerPage() {
                     <td className="px-3 py-2">
                       <MethodBadge method={endpoint.method} />
                     </td>
-                    <td className="max-w-[300px] px-3 py-2 font-mono text-[10px] text-[#d7e2ee]">
+                    <td className="max-w-[300px] px-3 py-2 font-mono text-[10px] text-[#E5EDF5]">
                       <span className="block truncate">{endpoint.path}</span>
                       <span className="mt-0.5 block text-[8px] text-[#6B8199]">
                         {endpoint.businessFlow}
@@ -275,7 +287,7 @@ export default function ApiExplorerPage() {
                           <ShieldAlert className="size-3" /> {endpoint.findingsCount}
                         </span>
                       ) : (
-                        <span className="font-mono text-[9px] text-[#3f566d]">—</span>
+                        <span className="font-mono text-[9px] text-[#6B8199]">—</span>
                       )}
                     </td>
                   </tr>
@@ -287,6 +299,13 @@ export default function ApiExplorerPage() {
                 No endpoints match the current filters.
               </p>
             )}
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              total={rows.length}
+              pageSize={pageSize}
+            />
           </div>
         )}
       </div>
@@ -305,7 +324,7 @@ export default function ApiExplorerPage() {
                   <MethodBadge method={selected.method} />
                   <ClassificationBadge value={selected.classification} />
                 </div>
-                <p className="mt-2 break-all font-mono text-[11px] text-[#d7e2ee]">
+                <p className="mt-2 break-all font-mono text-[11px] text-[#E5EDF5]">
                   {selected.path}
                 </p>
                 <p className="mt-1 text-[9px] text-[#7E93A8]">{selected.description}</p>

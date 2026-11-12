@@ -1,4 +1,12 @@
-import { ActionButton, Chip, PageHeader, Panel, Stat } from "@/components/security/ui";
+import {
+  ActionButton,
+  Chip,
+  ConfirmDialog,
+  LoadingState,
+  PageHeader,
+  Panel,
+  Stat,
+} from "@/components/security/ui";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { relativeTime } from "@/types/dast";
@@ -43,7 +51,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   CRITICAL: "#F87171",
   HIGH: "#F5B942",
   MEDIUM: "#F5B942",
-  LOW: "#64B5F6",
+  LOW: "#9FB3C8",
   INFORMATIONAL: "#9FB3C8",
 };
 
@@ -67,6 +75,7 @@ export default function OverviewPage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(true);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const severityData = useMemo(() => {
     if (!data) return [];
@@ -105,9 +114,6 @@ export default function OverviewPage() {
   }
 
   async function resetAll() {
-    if (!window.confirm("Reset all synthetic DAST data for this operator? The original JAAL console is untouched.")) {
-      return;
-    }
     setBusy("reset");
     try {
       await reset();
@@ -120,11 +126,7 @@ export default function OverviewPage() {
   }
 
   if (!bootstrap) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center text-[11px] text-[#9FB3C8]">
-        Loading security workspace…
-      </div>
-    );
+    return <LoadingState label="Loading security operations workspace" />;
   }
 
   if (!data) {
@@ -165,7 +167,7 @@ export default function OverviewPage() {
                     ["6", "attack modules"],
                     ["0", "external hosts"],
                   ].map(([value, label]) => (
-                    <div key={label} className="border border-[#22344a] bg-[#0F1B2D] px-3 py-2.5">
+                    <div key={label} className="border border-[#2A3B55] bg-[#0F1B2D] px-3 py-2.5">
                       <p className="text-xl font-semibold text-[#2DD4BF]">{value}</p>
                       <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                         {label}
@@ -193,17 +195,17 @@ export default function OverviewPage() {
               {STAGES.map((stage, index) => (
                 <div
                   key={stage}
-                  className="flex items-center gap-2 border border-[#1e3044] bg-[#0F1B2D] px-2.5 py-2"
+                  className="flex items-center gap-2 border border-[#2A3B55] bg-[#0F1B2D] px-2.5 py-2"
                 >
                   <span className="font-mono text-[8px] text-[#2DD4BF]">
                     {String(index + 1).padStart(2, "0")}
                   </span>
-                  <span className="text-[10px] text-[#b9c8d8]">{stage}</span>
+                  <span className="text-[10px] text-[#C7D5E5]">{stage}</span>
                 </div>
               ))}
             </div>
             <div className="mt-4 border-t border-[#24344F] pt-3">
-              <p className="font-mono text-[8px] uppercase leading-relaxed tracking-[0.13em] text-[#5f7692]">
+              <p className="font-mono text-[8px] uppercase leading-relaxed tracking-[0.13em] text-[#7E93A8]">
                 Seven agents · one orchestrator · persistent job records · human approval
                 before every active test.
               </p>
@@ -236,7 +238,11 @@ export default function OverviewPage() {
               <GitBranch className="size-3" />
               {busy === "run" ? "Running…" : "Trigger deployment"}
             </ActionButton>
-            <ActionButton variant="ghost" onClick={resetAll} disabled={busy === "reset"}>
+            <ActionButton
+              variant="ghost"
+              onClick={() => setConfirmReset(true)}
+              disabled={busy === "reset"}
+            >
               <RotateCcw className="size-3" />
               {busy === "reset" ? "Resetting…" : "Reset lab"}
             </ActionButton>
@@ -257,7 +263,7 @@ export default function OverviewPage() {
               <p className="text-[12px] font-medium text-[#F5B942]">
                 {data.latestInvestigation.caseId} is paused at the safety gate
               </p>
-              <p className="mt-0.5 text-[10px] text-[#b7a579]">
+              <p className="mt-0.5 text-[10px] text-[#F5B942]">
                 Discovery and planning completed. No active request will run until an
                 operator approves the scoped test plans.
               </p>
@@ -323,14 +329,14 @@ export default function OverviewPage() {
                     ? "border-[#34D399]/30 bg-[#34D399]/6"
                     : step.active
                       ? "border-[#F5B942]/40 bg-[#F5B942]/8"
-                      : "border-[#1e3044] bg-[#0F1B2D]",
+                      : "border-[#2A3B55] bg-[#0F1B2D]",
                 )}
               >
                 <p
                   className={cn(
                     "font-mono text-[8px] uppercase tracking-[0.08em]",
                     step.done
-                      ? "text-[#78b49a]"
+                      ? "text-[#34D399]"
                       : step.active
                         ? "text-[#F5B942]"
                         : "text-[#9FB3C8]",
@@ -392,7 +398,7 @@ export default function OverviewPage() {
                     <Tooltip
                       contentStyle={{
                         background: "#152238",
-                        border: "1px solid #26384f",
+                        border: "1px solid #2A3B55",
                         fontSize: 10,
                         color: "#E5EDF5",
                       }}
@@ -401,7 +407,7 @@ export default function OverviewPage() {
                 </ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-2xl font-semibold">{data.findingsTotal}</span>
-                  <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#5f7692]">
+                  <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#7E93A8]">
                     findings
                   </span>
                 </div>
@@ -428,7 +434,7 @@ export default function OverviewPage() {
           className="xl:col-span-6"
           title="Findings over the observation window"
           eyebrow="Trend · last 14 days"
-          action={<span className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#5f7692]">UTC</span>}
+          action={<span className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">UTC</span>}
         >
           <div className="h-[190px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -456,7 +462,7 @@ export default function OverviewPage() {
                 <Tooltip
                   contentStyle={{
                     background: "#152238",
-                    border: "1px solid #26384f",
+                    border: "1px solid #2A3B55",
                     fontSize: 10,
                     color: "#E5EDF5",
                   }}
@@ -484,7 +490,7 @@ export default function OverviewPage() {
             <MiniMetric label="Verified" value={data.verified} tone="text-[#F87171]" />
             <MiniMetric label="Retest success" value={data.retestSuccess == null ? "—" : `${Math.round(data.retestSuccess * 100)}%`} tone="text-[#34D399]" />
             <MiniMetric label="Reports" value={data.reportCount} tone="text-[#2DD4BF]" />
-            <MiniMetric label="Deployments" value={data.deploymentCount} tone="text-[#64B5F6]" />
+            <MiniMetric label="Deployments" value={data.deploymentCount} tone="text-[#9FB3C8]" />
           </div>
         </Panel>
 
@@ -493,7 +499,7 @@ export default function OverviewPage() {
             {[
               ["Active", inventory.active, "#34D399"],
               ["Zombie", inventory.zombie, "#F5B942"],
-              ["Shadow", inventory.shadow, "#B383F5"],
+              ["Shadow", inventory.shadow, "#F5B942"],
               ["Unknown", inventory.unknown, "#9FB3C8"],
             ].map(([label, value, color]) => {
               const numeric = Number(value);
@@ -501,11 +507,11 @@ export default function OverviewPage() {
               return (
                 <div key={String(label)}>
                   <div className="flex items-center justify-between text-[10px]">
-                    <span className="flex items-center gap-1.5 text-[#a6b7c9]">
+                    <span className="flex items-center gap-1.5 text-[#C7D5E5]">
                       <span className="size-1.5 rounded-full" style={{ backgroundColor: String(color) }} />
                       {label}
                     </span>
-                    <span className="font-mono text-[#6f849c]">
+                    <span className="font-mono text-[#7E93A8]">
                       {numeric} · {pct}%
                     </span>
                   </div>
@@ -560,7 +566,7 @@ export default function OverviewPage() {
                           ? "bg-[#F5B942]"
                           : event.severity === "SUCCESS"
                             ? "bg-[#34D399]"
-                            : "bg-[#64B5F6]",
+                            : "bg-[#9FB3C8]",
                     )}
                   />
                   <div className="min-w-0 flex-1">
@@ -585,11 +591,11 @@ export default function OverviewPage() {
               <div key={agent.key} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="flex size-7 items-center justify-center border border-[#2A3B55] bg-[#0F1B2D]">
                   {agent.key === "change-sentinel" ? (
-                    <GitBranch className="size-3.5 text-[#64B5F6]" />
+                    <GitBranch className="size-3.5 text-[#9FB3C8]" />
                   ) : agent.key === "recon-inventory" ? (
                     <Radar className="size-3.5 text-[#2DD4BF]" />
                   ) : agent.key === "attack-planner" ? (
-                    <Crosshair className="size-3.5 text-[#B383F5]" />
+                    <Crosshair className="size-3.5 text-[#F5B942]" />
                   ) : agent.key === "safe-executor" ? (
                     <ShieldCheck className="size-3.5 text-[#34D399]" />
                   ) : agent.key === "verification" ? (
@@ -655,10 +661,24 @@ export default function OverviewPage() {
                 {item.value}
               </p>
             </div>
-            <ArrowRight className="ml-auto size-3 text-[#3d5369] group-hover:text-[#2DD4BF]" />
+            <ArrowRight className="ml-auto size-3 text-[#6B8199] group-hover:text-[#2DD4BF]" />
           </Link>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={confirmReset}
+        onOpenChange={setConfirmReset}
+        tone="danger"
+        title="Reset this operator's synthetic DAST workspace?"
+        description="Only dast* records for this operator are deleted. Original JAAL forensic cases, consumer routes and investigation data are untouched. Audit history is retained."
+        confirmLabel="Reset DAST workspace"
+        busy={busy === "reset"}
+        onConfirm={() => {
+          setConfirmReset(false);
+          void resetAll();
+        }}
+      />
     </>
   );
 }

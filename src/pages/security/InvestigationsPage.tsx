@@ -1,7 +1,9 @@
 import {
   ActionButton,
   EmptyState,
+  LoadingState,
   PageHeader,
+  Pagination,
 } from "@/components/security/ui";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -32,6 +34,8 @@ export default function InvestigationsPage() {
   const trigger = useMutation(api.dast.triggerDeployment);
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(0);
+  const pageSize = 6;
 
   async function start() {
     setBusy(true);
@@ -61,9 +65,9 @@ export default function InvestigationsPage() {
         }
       />
 
-      {!bootstrap ? (
-        <div className="text-[11px] text-[#9FB3C8]">Loading security workspace…</div>
-      ) : !rows || rows.length === 0 ? (
+      {!bootstrap || rows === undefined ? (
+        <LoadingState label="Loading investigation records" />
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={<Activity className="size-5" />}
           title="No investigations yet"
@@ -76,7 +80,7 @@ export default function InvestigationsPage() {
         />
       ) : (
         <div className="space-y-2.5">
-          {rows.map((row) => {
+          {rows.slice(page * pageSize, (page + 1) * pageSize).map((row) => {
             const meta =
               INVESTIGATION_STATUS_META[row.status] ?? INVESTIGATION_STATUS_META.QUEUED;
             const stats = (row.stats ?? {}) as Record<string, unknown>;
@@ -123,7 +127,7 @@ export default function InvestigationsPage() {
                           {row.trigger}
                         </span>
                       </div>
-                      <p className="mt-1 truncate text-[12px] font-medium text-[#d7e2ee]">
+                      <p className="mt-1 truncate text-[12px] font-medium text-[#E5EDF5]">
                         {row.title}
                       </p>
                       <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-[#9FB3C8]">
@@ -176,22 +180,22 @@ export default function InvestigationsPage() {
                                 ? "bg-[#34D399]"
                                 : current
                                   ? "bg-[#F5B942]"
-                                  : "bg-[#26384f]",
+                                  : "bg-[#2A3B55]",
                             )}
                           />
                           <span
                             className={cn(
                               "hidden truncate font-mono text-[7px] uppercase tracking-[0.08em] sm:block",
                               done
-                                ? "text-[#6e8a7d]"
+                                ? "text-[#34D399]"
                                 : current
                                   ? "text-[#F5B942]"
-                                  : "text-[#415970]",
+                                  : "text-[#6B8199]",
                             )}
                           >
                             {STAGE_LABELS[stage]}
                           </span>
-                          {index < 6 && <span className="h-px flex-1 bg-[#1e3044]" />}
+                          {index < 6 && <span className="h-px flex-1 bg-[#2A3B55]" />}
                         </div>
                       );
                     },
@@ -200,6 +204,13 @@ export default function InvestigationsPage() {
               </Link>
             );
           })}
+          <Pagination
+            page={Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1))}
+            pageCount={Math.max(1, Math.ceil(rows.length / pageSize))}
+            onPageChange={setPage}
+            total={rows.length}
+            pageSize={pageSize}
+          />
         </div>
       )}
 

@@ -87,11 +87,11 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
             </span>
             <span className="size-1.5 rounded-full bg-[#34D399]" />
           </div>
-          <p className="mt-1 truncate text-[11px] font-medium text-[#d9e3ef]">
+          <p className="mt-1 truncate text-[11px] font-medium text-[#E5EDF5]">
             {labName}
           </p>
           <div className="mt-2 flex items-center gap-1.5">
-            <span className="border border-[#B383F5]/35 bg-[#B383F5]/8 px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-[0.12em] text-[#B383F5]">
+            <span className="border border-[#F5B942]/35 bg-[#F5B942]/8 px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-[0.12em] text-[#F5B942]">
               Synthetic lab
             </span>
             <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E93A8]">

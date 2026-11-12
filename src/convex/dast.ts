@@ -12,6 +12,8 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 import { getOwner } from "./lib/backend";
 import { sha256Hex } from "@/utils/hash";
 import { DAST_AGENTS, SEVERITY_ORDER, type DastSeverity } from "@/types/dast";
+import { canonicalJson } from "./dast/canonical";
+import { canonicalEvidence } from "./dast/redaction";
 import {
   LAB_ACTORS,
   LAB_DEPLOYMENT_V1,
@@ -158,36 +160,8 @@ function requestBodyFor(route: LabRouteDefinition): Record<string, unknown> | un
   return probeBody(route) as Record<string, unknown> | undefined;
 }
 
-function redactString(value: string): string {
-  return value
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer [REDACTED]")
-    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b/g, "[REDACTED_JWT]")
-    .replace(/\b(?:sk|pk|rk)_[A-Za-z0-9]{12,}\b/g, "[REDACTED_KEY]");
-}
-
-function sanitizeValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sanitizeValue);
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
-      if (/email/i.test(key) && typeof inner === "string") {
-        const [local, domain] = inner.split("@");
-        out[key] = `${(local ?? "?")[0] ?? "?"}•••@${domain ?? "example.test"}`;
-      } else if (/pnr/i.test(key) && typeof inner === "string") {
-        out[key] = `${inner.slice(0, 2)}-••`;
-      } else if (/authorization|cookie|token|password|secret/i.test(key)) {
-        out[key] = "[REDACTED]";
-      } else {
-        out[key] = sanitizeValue(inner);
-      }
-    }
-    return out;
-  }
-  return typeof value === "string" ? redactString(value) : value;
-}
-
 function evidenceJson(value: unknown): string {
-  return JSON.stringify(sanitizeValue(value), null, 2);
+  return canonicalEvidence(value);
 }
 
 /**
@@ -219,6 +193,42 @@ async function computeApprovalDigests(
   target: Doc<"dastTargets">,
   deployment: Doc<"dastDeployments"> | null,
 ) {
+  const planPayload = canonicalJson({
+    version: 2,
+    investigationId: String(investigation._id),
+    deploymentId: investigation.deploymentId ? String(investigation.deploymentId) : null,
+    plans: canonicalPlans(plans),
+  });
+  const scopePayload = canonicalJson({
+    version: 2,
+    baseUrl: target.baseUrl,
+    allowedHosts: [...target.allowedHosts].sort(),
+    allowedPaths: [...target.allowedPaths].sort(),
+    scheme: target.scheme,
+    status: target.status,
+    methods: ["GET", "POST"],
+    allowRedirects: false,
+    maxRequestsPerRun: policy.maxRequestsPerRun,
+    deploymentVersion: deployment?.version ?? null,
+  });
+  return {
+    planDigest: await sha256Hex(planPayload),
+    scopeDigest: await sha256Hex(scopePayload),
+    digestVersion: 2,
+  };
+}
+
+/**
+ * Pre-v2 digest format. Kept only so an approval created before the canonical
+ * serializer migration can still be recognised and upgraded on approval.
+ */
+async function legacyApprovalDigests(
+  plans: Doc<"dastPlans">[],
+  investigation: Doc<"dastInvestigations">,
+  policy: Doc<"dastPolicies">,
+  target: Doc<"dastTargets">,
+  deployment: Doc<"dastDeployments"> | null,
+) {
   const planPayload = JSON.stringify({
     version: 1,
     investigationId: String(investigation._id),
@@ -240,7 +250,41 @@ async function computeApprovalDigests(
   return {
     planDigest: await sha256Hex(planPayload),
     scopeDigest: await sha256Hex(scopePayload),
+    digestVersion: 1,
   };
+}
+
+async function approvalDigestMatches(
+  approval: Doc<"dastApprovals">,
+  plans: Doc<"dastPlans">[],
+  investigation: Doc<"dastInvestigations">,
+  policy: Doc<"dastPolicies">,
+  target: Doc<"dastTargets">,
+  deployment: Doc<"dastDeployments"> | null,
+) {
+  const current = await computeApprovalDigests(
+    plans,
+    investigation,
+    policy,
+    target,
+    deployment,
+  );
+  if (approval.digestVersion === 2) {
+    return (
+      current.planDigest === approval.planDigest &&
+      current.scopeDigest === approval.scopeDigest
+    );
+  }
+  const legacy = await legacyApprovalDigests(
+    plans,
+    investigation,
+    policy,
+    target,
+    deployment,
+  );
+  return (
+    legacy.planDigest === approval.planDigest && legacy.scopeDigest === approval.scopeDigest
+  );
 }
 
 function sameIds(a: readonly string[], b: readonly string[]) {
@@ -291,6 +335,36 @@ async function enforceConcurrency(
       `Concurrency limit (${policy.maxConcurrency}) reached. Wait for the active investigation to finish.`,
     );
   }
+}
+
+async function expireOpenApprovals(
+  ctx: Ctx,
+  owner: string,
+  applicationId: Id<"dastApplications">,
+  reason: string,
+) {
+  const investigations = await ctx.db
+    .query("dastInvestigations")
+    .withIndex("by_owner_application", (q) =>
+      q.eq("owner", owner).eq("applicationId", applicationId),
+    )
+    .collect();
+  let expired = 0;
+  for (const investigation of investigations) {
+    for (const status of ["PENDING", "APPROVED"] as const) {
+      const approvals = await ctx.db
+        .query("dastApprovals")
+        .withIndex("by_investigation_status", (q) =>
+          q.eq("investigationId", investigation._id).eq("status", status),
+        )
+        .collect();
+      for (const approval of approvals) {
+        await ctx.db.patch(approval._id, { status: "EXPIRED", note: reason });
+        expired += 1;
+      }
+    }
+  }
+  return expired;
 }
 
 async function plansForInvestigation(
@@ -534,7 +608,7 @@ async function discover(
       statusCode: response.status,
       latencyMs: response.latencyMs,
       requestSample: `${route.method} ${route.probePath}`,
-      responseSample: JSON.stringify(sanitizeValue(response.body)).slice(0, 700),
+      responseSample: canonicalEvidence(response.body).slice(0, 700),
       observedAt: now,
       source: "authorized discovery probe",
     });
@@ -871,6 +945,7 @@ async function runPipeline(
     status: "PENDING",
     planDigest: digests.planDigest,
     scopeDigest: digests.scopeDigest,
+    digestVersion: digests.digestVersion,
     expiresAt: Date.now() + APPROVAL_TTL_MS,
     requestedAt: Date.now(),
     note: "Active tests require explicit operator approval of this exact plan and scope.",
@@ -1164,12 +1239,23 @@ export const approveInvestigation = mutation({
       throw new Error("The plan set changed after approval was requested. Generate new plans.");
     }
     const digests = await computeApprovalDigests(plans, investigation, policy, target, deployment);
-    if (digests.planDigest !== approval.planDigest || digests.scopeDigest !== approval.scopeDigest) {
+    const digestMatches = await approvalDigestMatches(
+      approval,
+      plans,
+      investigation,
+      policy,
+      target,
+      deployment,
+    );
+    if (!digestMatches) {
       await ctx.db.patch(approval._id, { status: "EXPIRED" });
       throw new Error("The plan or scope changed after approval was requested. Approval refused.");
     }
     await ctx.db.patch(approval._id, {
       status: "APPROVED",
+      planDigest: digests.planDigest,
+      scopeDigest: digests.scopeDigest,
+      digestVersion: digests.digestVersion,
       expiresAt: now + APPROVAL_TTL_MS,
       decidedAt: now,
       decidedBy: identity?.name ?? owner,
@@ -1260,14 +1346,15 @@ export const executeInvestigation = mutation({
     const approvalDeployment = investigation.deploymentId
       ? await ctx.db.get(investigation.deploymentId)
       : null;
-    const digests = await computeApprovalDigests(
+    const digestMatches = await approvalDigestMatches(
+      approval,
       plans,
       investigation,
       policy,
       target,
       approvalDeployment,
     );
-    if (digests.planDigest !== approval.planDigest || digests.scopeDigest !== approval.scopeDigest) {
+    if (!digestMatches) {
       await ctx.db.patch(approval._id, { status: "EXPIRED" });
       throw new Error("The plan or scope changed after approval. Execution refused.");
     }
@@ -1360,9 +1447,40 @@ export const executeInvestigation = mutation({
         continue;
       }
 
-      if (requestCount + plan.maxRequests > policy.maxRequestsPerRun) {
+      const plannedRequests = definition.maxRequests;
+      if (
+        plannedRequests > plan.maxRequests ||
+        requestCount + plannedRequests > policy.maxRequestsPerRun
+      ) {
         rejectedPlans += 1;
         await ctx.db.patch(plan._id, { status: "REJECTED_BUDGET" });
+        await ctx.db.insert("dastExecutions", {
+          owner,
+          investigationId: args.id,
+          planId: plan._id,
+          testKey: plan.testKey,
+          status: "BLOCKED",
+          requestCount: 0,
+          startedAt: Date.now(),
+          completedAt: Date.now(),
+          assertions: {
+            phase: "PREFLIGHT",
+            plannedRequests,
+            planBudget: plan.maxRequests,
+            remainingRunBudget: policy.maxRequestsPerRun - requestCount,
+          },
+          result: { violated: false, controlPassed: false },
+          error: "Request budget would be exceeded; the test was not dispatched.",
+        });
+        await audit(ctx, {
+          owner,
+          applicationId: investigation.applicationId,
+          investigationId: args.id,
+          type: "safety.budget.blocked",
+          actor,
+          message: `Blocked ${plan.testKey} before dispatch: ${plannedRequests} planned requests exceed the approved remaining budget.`,
+          severity: "WARN",
+        });
         continue;
       }
 
@@ -1903,16 +2021,22 @@ export const updatePolicy = mutation({
       patch.zombieWindowDays = Math.round(args.zombieWindowDays);
     }
     await ctx.db.patch(policy._id, patch);
+    const invalidated = await expireOpenApprovals(
+      ctx,
+      owner,
+      app._id,
+      "Expired because the safety policy changed. A new approval is required.",
+    );
     await audit(ctx, {
       owner,
       applicationId: app._id,
       type: "safety.policy.updated",
       actor: owner,
-      message: "Safety policy updated.",
+      message: `Safety policy updated; ${invalidated} open approval(s) invalidated.`,
       severity: "WARN",
-      metadata: patch,
+      metadata: { ...patch, invalidatedApprovals: invalidated },
     });
-    return { ok: true };
+    return { ok: true, invalidatedApprovals: invalidated };
   },
 });
 
@@ -1997,15 +2121,22 @@ export const setLabMode = mutation({
     const app = await appForOwner(ctx, owner);
     if (!app) throw new Error("No lab is initialized.");
     await writeLabMode(ctx, app._id, args.mode);
+    const invalidated = await expireOpenApprovals(
+      ctx,
+      owner,
+      app._id,
+      "Expired because the lab configuration changed. A new approval is required.",
+    );
     await audit(ctx, {
       owner,
       applicationId: app._id,
       type: "lab.mode.changed",
       actor: owner,
-      message: `Synthetic lab switched to ${args.mode}.`,
+      message: `Synthetic lab switched to ${args.mode}; ${invalidated} open approval(s) invalidated.`,
       severity: "WARN",
+      metadata: { invalidatedApprovals: invalidated },
     });
-    return { mode: args.mode };
+    return { mode: args.mode, invalidatedApprovals: invalidated };
   },
 });
 

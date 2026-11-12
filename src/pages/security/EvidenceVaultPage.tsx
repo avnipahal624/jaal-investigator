@@ -2,7 +2,9 @@ import {
   ActionButton,
   Chip,
   EmptyState,
+  LoadingState,
   PageHeader,
+  Pagination,
 } from "@/components/security/ui";
 import { api } from "@/convex/_generated/api";
 import { sha256Hex } from "@/utils/hash";
@@ -28,6 +30,8 @@ export default function EvidenceVaultPage() {
   const [type, setType] = useState("ALL");
   const [checks, setChecks] = useState<Record<string, "checking" | "match" | "mismatch">>({});
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const pageSize = 8;
 
   const findingLabels = useMemo(() => {
     const map = new Map<string, string>();
@@ -71,6 +75,14 @@ export default function EvidenceVaultPage() {
       setChecks((current) => ({ ...current, [id]: "mismatch" }));
       toast.error("Could not compute SHA-256");
     }
+  }
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visibleRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+
+  if (evidence === undefined || findings === undefined) {
+    return <LoadingState label="Loading sealed evidence artifacts" />;
   }
 
   function downloadManifest() {
@@ -129,7 +141,7 @@ export default function EvidenceVaultPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search artifact, finding or hash…"
-              className="h-8 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[11px] text-[#d7e2ee] placeholder:text-[#4d647a] focus:border-[#2DD4BF]/60 focus:outline-none"
+              className="h-8 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[11px] text-[#E5EDF5] placeholder:text-[#6B8199] focus:border-[#2DD4BF]/60 focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -165,7 +177,7 @@ export default function EvidenceVaultPage() {
           </div>
         ) : (
           <div className="divide-y divide-[#1B2C45]">
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const state = checks[row._id];
               const isOpen = expanded === row._id;
               return (
@@ -176,7 +188,7 @@ export default function EvidenceVaultPage() {
                         <Fingerprint className="size-3.5 text-[#34D399]" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-[11px] text-[#d7e2ee]">{row.label}</p>
+                        <p className="truncate text-[11px] text-[#E5EDF5]">{row.label}</p>
                         <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.08em] text-[#6B8199]">
                           {row.type.replaceAll("_", " ")} · {row.algorithm} ·{" "}
                           {relativeTime(row.createdAt)}
@@ -218,7 +230,7 @@ export default function EvidenceVaultPage() {
                     </div>
                   </div>
                   {isOpen && (
-                    <div className="border-t border-[#1B2C45] bg-[#080f1a] px-4 py-3">
+                    <div className="border-t border-[#1B2C45] bg-[#0A1526] px-4 py-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E93A8]">
                           Sanitized artifact · {formatTimestamp(row.createdAt)}
@@ -227,7 +239,7 @@ export default function EvidenceVaultPage() {
                           <ShieldX className="size-3" /> traveller PII redacted
                         </span>
                       </div>
-                      <pre className="max-h-[300px] overflow-auto border border-[#2A3B55] bg-[#0F1B2D] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
+                      <pre className="max-h-[300px] overflow-auto border border-[#2A3B55] bg-[#0F1B2D] p-3 font-mono text-[9px] leading-relaxed text-[#C7D5E5]">
                         {row.content}
                       </pre>
                     </div>
@@ -240,6 +252,13 @@ export default function EvidenceVaultPage() {
                 No artifacts match the current filters.
               </p>
             )}
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              total={rows.length}
+              pageSize={pageSize}
+            />
           </div>
         )}
       </div>
@@ -252,7 +271,7 @@ export default function EvidenceVaultPage() {
           <LockKeyhole className="size-3 text-[#2DD4BF]" /> Owner-scoped access
         </span>
         <span className="flex items-center gap-1.5">
-          <ShieldCheck className="size-3 text-[#64B5F6]" /> Verification recomputes content
+          <ShieldCheck className="size-3 text-[#9FB3C8]" /> Verification recomputes content
         </span>
       </div>
     </>

@@ -4,6 +4,7 @@ import {
   ConfirmDialog,
   FindingStatusBadge,
   KeyValue,
+  LoadingState,
   PageHeader,
   Panel,
   SeverityBadge,
@@ -64,7 +65,7 @@ export default function InvestigationDetailPage() {
   const [confirmAction, setConfirmAction] = useState<"execute" | "deny" | null>(null);
 
   if (detail === undefined) {
-    return <div className="py-16 text-center text-[11px] text-[#9FB3C8]">Loading investigation…</div>;
+    return <LoadingState label="Loading investigation, plans and evidence" />;
   }
   if (!detail) {
     return (
@@ -184,7 +185,7 @@ export default function InvestigationDetailPage() {
       <div className="mt-4 grid gap-4 xl:grid-cols-12">
         <div className="space-y-4 xl:col-span-8">
           {pending && (
-            <Panel className="border-[#F5B942]/35 bg-[#141a20]" flush>
+            <Panel className="border-[#F5B942]/35 bg-[#152238]" flush>
               <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-start gap-3">
                   <div className="flex size-10 shrink-0 items-center justify-center border border-[#F5B942]/40 bg-[#F5B942]/10">
@@ -194,7 +195,7 @@ export default function InvestigationDetailPage() {
                     <p className="text-[13px] font-semibold text-[#F5B942]">
                       Human approval required before active testing
                     </p>
-                    <p className="mt-1 max-w-lg text-[10px] leading-relaxed text-[#b7a579]">
+                    <p className="mt-1 max-w-lg text-[10px] leading-relaxed text-[#F5B942]">
                       {plans.length} test plans are bound to a SHA-256 plan/scope digest. The
                       execution agent will only use GET/POST against{" "}
                       <span className="font-mono">lab.jaal.internal</span>, within the request
@@ -234,7 +235,7 @@ export default function InvestigationDetailPage() {
                 <div className="flex items-center gap-3">
                   <ShieldCheck className="size-5 text-[#34D399]" />
                   <div>
-                    <p className="text-[12px] text-[#d7e2ee]">Approval recorded</p>
+                    <p className="text-[12px] text-[#E5EDF5]">Approval recorded</p>
                     <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[#7E93A8]">
                       {approved.decidedBy} · {relativeTime(approved.decidedAt)}
                     </p>
@@ -272,23 +273,23 @@ export default function InvestigationDetailPage() {
                           ? "border-[#34D399]/25 bg-[#34D399]/5"
                           : current
                             ? "border-[#F5B942]/40 bg-[#F5B942]/8"
-                            : "border-[#1e3044] bg-[#0F1B2D]",
+                            : "border-[#2A3B55] bg-[#0F1B2D]",
                       )}
                     >
                       <span
                         className={cn(
                           "mx-auto block size-1.5 rounded-full",
-                          done ? "bg-[#34D399]" : current ? "bg-[#F5B942]" : "bg-[#31465d]",
+                          done ? "bg-[#34D399]" : current ? "bg-[#F5B942]" : "bg-[#6B8199]",
                         )}
                       />
                       <p
                         className={cn(
                           "mt-1.5 font-mono text-[7px] uppercase leading-tight tracking-[0.08em]",
                           done
-                            ? "text-[#78b49a]"
+                            ? "text-[#34D399]"
                             : current
                               ? "text-[#F5B942]"
-                              : "text-[#4d647a]",
+                              : "text-[#6B8199]",
                         )}
                       >
                         {STAGE_LABELS[stage] ?? stage}
@@ -315,11 +316,11 @@ export default function InvestigationDetailPage() {
                                   ? "bg-[#F5B942]"
                                   : event.severity === "SUCCESS"
                                     ? "bg-[#34D399]"
-                                    : "bg-[#64B5F6]",
+                                    : "bg-[#9FB3C8]",
                             )}
                           />
                           {index < events.length - 1 && (
-                            <span className="mt-1 h-full w-px flex-1 bg-[#1e3044]" />
+                            <span className="mt-1 h-full w-px flex-1 bg-[#2A3B55]" />
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -366,7 +367,7 @@ export default function InvestigationDetailPage() {
                       </span>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-[11px] font-medium text-[#d7e2ee]">{plan.title}</p>
+                          <p className="text-[11px] font-medium text-[#E5EDF5]">{plan.title}</p>
                           <SeverityBadge severity={plan.risk} />
                         </div>
                         <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.09em] text-[#7E93A8]">
@@ -380,11 +381,11 @@ export default function InvestigationDetailPage() {
                     {plan.rationale}
                   </p>
                   {plan.aiRationale && (
-                    <div className="mt-2 border-l border-[#B383F5]/50 bg-[#B383F5]/5 px-2.5 py-1.5">
-                      <p className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#B383F5]">
+                    <div className="mt-2 border-l border-[#F5B942]/50 bg-[#F5B942]/5 px-2.5 py-1.5">
+                      <p className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#F5B942]">
                         Groq advisory · not executed
                       </p>
-                      <p className="mt-1 text-[10px] leading-relaxed text-[#b7a8cc]">
+                      <p className="mt-1 text-[10px] leading-relaxed text-[#F5B942]">
                         {plan.aiRationale}
                       </p>
                     </div>
@@ -436,7 +437,7 @@ export default function InvestigationDetailPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-left">
                   <thead>
-                    <tr className="border-b border-[#24344F] bg-[#0c1521]">
+                    <tr className="border-b border-[#24344F] bg-[#0F1B2D]">
                       {["Test", "Status", "Requests", "Control", "Assertion"].map((header) => (
                         <th
                           key={header}
@@ -499,7 +500,7 @@ export default function InvestigationDetailPage() {
                     <div className="flex items-start gap-3">
                       <SeverityBadge severity={finding.severity} />
                       <div>
-                        <p className="text-[11px] text-[#d7e2ee]">
+                        <p className="text-[11px] text-[#E5EDF5]">
                           {finding.findingId} · {finding.title}
                         </p>
                         <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
@@ -510,7 +511,7 @@ export default function InvestigationDetailPage() {
                     <div className="flex items-center gap-2">
                       <FindingStatusBadge status={finding.status} />
                       <Fingerprint className="size-3 text-[#34D399]" />
-                      <span className="font-mono text-[8px] text-[#5f7692]">
+                      <span className="font-mono text-[8px] text-[#7E93A8]">
                         {finding.evidenceHash.slice(0, 10)}…
                       </span>
                     </div>
@@ -584,7 +585,7 @@ export default function InvestigationDetailPage() {
               <div className="mt-3 space-y-1.5 border-t border-[#24344F] pt-3">
                 {(deployment.changes as Array<{ type: string; method: string; path: string; detail: string }>).map(
                   (change, index) => (
-                    <div key={`${change.path}-${index}`} className="border border-[#1e3044] bg-[#0F1B2D] p-2">
+                    <div key={`${change.path}-${index}`} className="border border-[#2A3B55] bg-[#0F1B2D] p-2">
                       <div className="flex items-center gap-2">
                         <Chip
                           tone={
@@ -633,10 +634,10 @@ export default function InvestigationDetailPage() {
                           ? "bg-[#34D399]"
                           : active
                             ? "bg-[#F5B942]"
-                            : "bg-[#31465d]",
+                            : "bg-[#6B8199]",
                       )}
                     />
-                    <span className="text-[10px] text-[#a6b7c9]">{name}</span>
+                    <span className="text-[10px] text-[#C7D5E5]">{name}</span>
                     <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
                       {done ? "done" : active ? "active" : "queued"}
                     </span>
@@ -701,7 +702,7 @@ function Metric({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="border border-[#24344F] bg-[#152238] p-3">
       <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">{label}</p>
-      <p className="mt-1 truncate text-[13px] font-medium text-[#d7e2ee]">{value}</p>
+      <p className="mt-1 truncate text-[13px] font-medium text-[#E5EDF5]">{value}</p>
     </div>
   );
 }
@@ -711,7 +712,7 @@ function ExecutionStatus({ status }: { status: string }) {
     VERIFIED: { color: "#F87171", label: "VERIFIED", icon: <ShieldX className="size-3" /> },
     FALSE_POSITIVE: { color: "#9FB3C8", label: "FALSE POSITIVE", icon: <CheckCircle2 className="size-3" /> },
     INCONCLUSIVE: { color: "#F5B942", label: "INCONCLUSIVE", icon: <Clock3 className="size-3" /> },
-    READY: { color: "#64B5F6", label: "READY", icon: <Clock3 className="size-3" /> },
+    READY: { color: "#9FB3C8", label: "READY", icon: <Clock3 className="size-3" /> },
     BLOCKED: { color: "#F87171", label: "BLOCKED", icon: <ShieldX className="size-3" /> },
     REJECTED_BY_SCOPE: { color: "#F87171", label: "SCOPE BLOCK", icon: <ShieldX className="size-3" /> },
     REJECTED_BUDGET: { color: "#F5B942", label: "BUDGET BLOCK", icon: <Clock3 className="size-3" /> },

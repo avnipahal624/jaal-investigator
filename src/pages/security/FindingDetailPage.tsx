@@ -4,6 +4,7 @@ import {
   ConfirmDialog,
   FindingStatusBadge,
   KeyValue,
+  LoadingState,
   MethodBadge,
   PageHeader,
   Panel,
@@ -42,7 +43,7 @@ export default function FindingDetailPage() {
   const [verification, setVerification] = useState<null | "match" | "mismatch" | "checking">(null);
 
   if (detail === undefined) {
-    return <div className="py-16 text-center text-[11px] text-[#9FB3C8]">Loading finding…</div>;
+    return <LoadingState label="Loading finding, evidence and retest history" />;
   }
   if (!detail) {
     return (
@@ -234,7 +235,7 @@ ${finding.remediation}
                     {step.step}
                   </span>
                   <div>
-                    <p className="text-[11px] leading-relaxed text-[#d7e2ee]">{step.action}</p>
+                    <p className="text-[11px] leading-relaxed text-[#E5EDF5]">{step.action}</p>
                     <p className="mt-1 font-mono text-[9px] text-[#6B8199]">
                       expected: {step.expected}
                     </p>
@@ -247,7 +248,7 @@ ${finding.remediation}
               <p className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#F87171]">
                 <ShieldX className="size-3" /> Why this is verified
               </p>
-              <p className="mt-1.5 text-[10px] leading-relaxed text-[#b98b8f]">
+              <p className="mt-1.5 text-[10px] leading-relaxed text-[#F87171]">
                 The control request succeeded, the attack request crossed the stated
                 security boundary, and the evidence is a deterministic synthetic-lab
                 response — not an LLM opinion. A generic 200 alone would not have been
@@ -306,7 +307,7 @@ ${finding.remediation}
                 <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                   Request (sanitized)
                 </p>
-                <pre className="max-h-[260px] overflow-auto border border-[#2A3B55] bg-[#080f1a] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
+                <pre className="max-h-[260px] overflow-auto border border-[#2A3B55] bg-[#0A1526] p-3 font-mono text-[9px] leading-relaxed text-[#C7D5E5]">
                   {finding.requestEvidence}
                 </pre>
               </div>
@@ -314,7 +315,7 @@ ${finding.remediation}
                 <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                   Response (sanitized)
                 </p>
-                <pre className="max-h-[260px] overflow-auto border border-[#2A3B55] bg-[#080f1a] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
+                <pre className="max-h-[260px] overflow-auto border border-[#2A3B55] bg-[#0A1526] p-3 font-mono text-[9px] leading-relaxed text-[#C7D5E5]">
                   {finding.responseEvidence}
                 </pre>
               </div>

@@ -1,6 +1,7 @@
 import {
   ActionButton,
   Chip,
+  LoadingState,
   PageHeader,
   Panel,
 } from "@/components/security/ui";
@@ -71,6 +72,10 @@ export default function AgentsPage() {
   const pending =
     investigations?.filter((investigation) => investigation.status === "WAITING_FOR_APPROVAL") ?? [];
 
+  if (agents === undefined) {
+    return <LoadingState label="Loading agent state and approval queue" />;
+  }
+
   return (
     <>
       <PageHeader
@@ -94,7 +99,7 @@ export default function AgentsPage() {
             </div>
             <div>
               <p className="text-[12px] font-semibold text-[#5EEAD4]">Orchestrator</p>
-              <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#5f8c8c]">
+              <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E93A8]">
                 durable job + approval state
               </p>
             </div>
@@ -106,11 +111,11 @@ export default function AgentsPage() {
               return (
                 <div
                   key={agent.key}
-                  className="flex items-center gap-2 border border-[#1e3044] bg-[#0F1B2D] px-2 py-2"
+                  className="flex items-center gap-2 border border-[#2A3B55] bg-[#0F1B2D] px-2 py-2"
                 >
                   <Icon className="size-3 shrink-0 text-[#2DD4BF]" />
                   <div className="min-w-0">
-                    <p className="truncate text-[8px] text-[#b9c8d8]">
+                    <p className="truncate text-[8px] text-[#C7D5E5]">
                       {agent.name.split(" ")[0]}
                     </p>
                     <p className="truncate font-mono text-[7px] uppercase tracking-[0.06em] text-[#6B8199]">
@@ -133,7 +138,7 @@ export default function AgentsPage() {
                 <p className="text-[11px] font-medium text-[#F5B942]">
                   {pending.length} investigation{pending.length > 1 ? "s" : ""} waiting for approval
                 </p>
-                <p className="mt-0.5 text-[10px] text-[#b7a579]">
+                <p className="mt-0.5 text-[10px] text-[#F5B942]">
                   The execution agent is paused at the safety gate. No active test runs
                   until an operator approves the plan.
                 </p>
@@ -166,7 +171,7 @@ export default function AgentsPage() {
                     <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#6B8199]">
                       Agent {String(index + 1).padStart(2, "0")}
                     </p>
-                    <p className="mt-0.5 text-[12px] font-semibold text-[#d7e2ee]">{agent.name}</p>
+                    <p className="mt-0.5 text-[12px] font-semibold text-[#E5EDF5]">{agent.name}</p>
                   </div>
                 </div>
                 <span
@@ -187,7 +192,7 @@ export default function AgentsPage() {
                     <p className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#6B8199]">
                       Current task
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[9px] text-[#a6b7c9]">
+                    <p className="mt-0.5 line-clamp-2 text-[9px] text-[#C7D5E5]">
                       {agent.currentTask ?? "Idle — no task assigned"}
                     </p>
                   </div>
@@ -195,7 +200,7 @@ export default function AgentsPage() {
                     <p className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#6B8199]">
                       Last execution
                     </p>
-                    <p className="mt-0.5 text-[9px] text-[#a6b7c9]">
+                    <p className="mt-0.5 text-[9px] text-[#C7D5E5]">
                       {agent.lastRunAt ? relativeTime(agent.lastRunAt) : "Never"}
                     </p>
                   </div>
@@ -203,7 +208,7 @@ export default function AgentsPage() {
                     <p className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#6B8199]">
                       Duration
                     </p>
-                    <p className="mt-0.5 font-mono text-[9px] text-[#a6b7c9]">
+                    <p className="mt-0.5 font-mono text-[9px] text-[#C7D5E5]">
                       {formatDuration(agent.durationMs)}
                     </p>
                   </div>

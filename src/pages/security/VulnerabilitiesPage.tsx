@@ -3,8 +3,10 @@ import {
   ConfirmDialog,
   EmptyState,
   FindingStatusBadge,
+  LoadingState,
   MethodBadge,
   PageHeader,
+  Pagination,
   SeverityBadge,
 } from "@/components/security/ui";
 import { api } from "@/convex/_generated/api";
@@ -31,6 +33,8 @@ export default function VulnerabilitiesPage() {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const pageSize = 10;
 
   const rows = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -58,6 +62,10 @@ export default function VulnerabilitiesPage() {
     };
   }, [findings]);
 
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visibleRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+
   async function retest() {
     setBusy(true);
     try {
@@ -70,6 +78,10 @@ export default function VulnerabilitiesPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (findings === undefined) {
+    return <LoadingState label="Loading verified findings" />;
   }
 
   return (
@@ -114,7 +126,7 @@ export default function VulnerabilitiesPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search finding, endpoint or owner…"
-              className="h-8 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[11px] text-[#d7e2ee] placeholder:text-[#4d647a] focus:border-[#2DD4BF]/60 focus:outline-none"
+              className="h-8 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[11px] text-[#E5EDF5] placeholder:text-[#6B8199] focus:border-[#2DD4BF]/60 focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -155,7 +167,7 @@ export default function VulnerabilitiesPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] text-left">
               <thead>
-                <tr className="border-b border-[#24344F] bg-[#0c1521]">
+                <tr className="border-b border-[#24344F] bg-[#0F1B2D]">
                   {[
                     "Finding",
                     "Vulnerability",
@@ -177,7 +189,7 @@ export default function VulnerabilitiesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((finding) => (
+                {visibleRows.map((finding) => (
                   <tr
                     key={finding._id}
                     className="border-b border-[#1B2C45] transition-colors last:border-b-0 hover:bg-[#1B2C45]"
@@ -193,7 +205,7 @@ export default function VulnerabilitiesPage() {
                     <td className="max-w-[260px] px-3 py-2.5">
                       <Link
                         to={`/security/vulnerabilities/${finding._id}`}
-                        className="block truncate text-[10px] text-[#d7e2ee] hover:text-white"
+                        className="block truncate text-[10px] text-[#E5EDF5] hover:text-white"
                       >
                         {finding.title}
                       </Link>
@@ -241,6 +253,13 @@ export default function VulnerabilitiesPage() {
                 No findings match the current filters.
               </p>
             )}
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              total={rows.length}
+              pageSize={pageSize}
+            />
           </div>
         )}
       </div>

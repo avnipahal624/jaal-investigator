@@ -16,7 +16,7 @@ function Inline({ text }: { text: string }) {
           return (
             <code
               key={index}
-              className="border border-[#2A3B55] bg-[#0F1B2D] px-1 py-0.5 font-mono text-[0.9em] text-[#8fe8df]"
+              className="border border-[#2A3B55] bg-[#0F1B2D] px-1 py-0.5 font-mono text-[0.9em] text-[#5EEAD4]"
             >
               {part.slice(1, -1)}
             </code>
@@ -57,7 +57,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
               {language}
             </p>
           )}
-          <pre className="overflow-auto border border-[#2A3B55] bg-[#080f1a] p-3 font-mono text-[10px] leading-relaxed text-[#9fb4c9]">
+          <pre className="overflow-auto border border-[#2A3B55] bg-[#0A1526] p-3 font-mono text-[10px] leading-relaxed text-[#C7D5E5]">
             {code.join("\n")}
           </pre>
         </div>,
@@ -81,7 +81,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
         <div key={`table-${index}`} className="my-4 overflow-x-auto">
           <table className="w-full border-collapse text-left text-[10px]">
             <thead>
-              <tr className="border-b border-[#2a3d53] bg-[#0c1521]">
+              <tr className="border-b border-[#2a3d53] bg-[#0F1B2D]">
                 {header?.map((cell, cellIndex) => (
                   <th
                     key={cellIndex}
@@ -96,7 +96,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
               {body.map((row, rowIndex) => (
                 <tr key={rowIndex} className="border-b border-[#1B2C45]">
                   {row.map((cell, cellIndex) => (
-                    <td key={cellIndex} className="px-2 py-1.5 text-[#aebdcd]">
+                    <td key={cellIndex} className="px-2 py-1.5 text-[#C7D5E5]">
                       <Inline text={cell} />
                     </td>
                   ))}
@@ -119,7 +119,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
       blocks.push(
         <h2
           key={index}
-          className="mb-2 mt-6 border-t border-[#1e3044] pt-4 text-[15px] font-semibold text-[#E5EDF5]"
+          className="mb-2 mt-6 border-t border-[#2A3B55] pt-4 text-[15px] font-semibold text-[#E5EDF5]"
         >
           <Inline text={line.slice(3)} />
         </h2>,
@@ -141,7 +141,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
           {items.map((item, itemIndex) => (
             <li
               key={itemIndex}
-              className="relative text-[11px] leading-relaxed text-[#aebdcd] before:absolute before:-left-3 before:text-[#2DD4BF] before:content-['·']"
+              className="relative text-[11px] leading-relaxed text-[#C7D5E5] before:absolute before:-left-3 before:text-[#2DD4BF] before:content-['·']"
             >
               <Inline text={item} />
             </li>
@@ -158,7 +158,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
       blocks.push(
         <ol key={`ordered-${index}`} className="my-2 list-decimal space-y-1 pl-5">
           {items.map((item, itemIndex) => (
-            <li key={itemIndex} className="text-[11px] leading-relaxed text-[#aebdcd]">
+            <li key={itemIndex} className="text-[11px] leading-relaxed text-[#C7D5E5]">
               <Inline text={item} />
             </li>
           ))}
@@ -169,7 +169,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
       blocks.push(<div key={index} className="h-1" />);
     } else {
       blocks.push(
-        <p key={index} className="my-1.5 text-[11px] leading-relaxed text-[#aebdcd]">
+        <p key={index} className="my-1.5 text-[11px] leading-relaxed text-[#C7D5E5]">
           <Inline text={line} />
         </p>,
       );

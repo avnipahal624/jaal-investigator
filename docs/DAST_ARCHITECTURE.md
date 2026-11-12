@@ -16,6 +16,8 @@ flowchart LR
 
 The original forensic tables (`investigations`, `evidence`, `reports`, `messages`, `tactics`, …) are not read or modified by this module. DAST ownership is the stable Convex Auth user ID, and every query/mutation checks it server-side.
 
+External staging execution is deliberately disabled. See [`DAST_EXTERNAL_EXECUTION_DESIGN.md`](DAST_EXTERNAL_EXECUTION_DESIGN.md) for the worker boundary, authorization workflow, SSRF/DNS-rebinding controls, queue semantics and enablement gates that must be implemented and tested before any outbound target is allowed.
+
 ## Investigation sequence
 
 ```mermaid
@@ -75,11 +77,13 @@ sequenceDiagram
 ## Safety boundary
 
 1. **Plan validation** — method ∈ {GET, POST}, HTTPS only, exact host allowlist, `/api/*` scope, budget 1–20 per plan.
-2. **Approval** — `executeInvestigation` refuses unless an `APPROVED` row exists, its plan and scope digests still match, it has not expired, and it has not already been consumed. Approval is consumed before the first test, so a successful run cannot be replayed.
+2. **Approval** — `executeInvestigation` refuses unless an `APPROVED` row exists, its canonical SHA-256 plan and scope digests still match, it has not expired, and it has not already been consumed. New approvals use sorted-key canonical JSON (`digestVersion: 2`); a legacy v1 path exists only to recognise pre-migration approvals. Policy or lab-configuration changes expire open approvals. Approval is consumed before the first test, so a successful run cannot be replayed.
 3. **Emergency stop** — checked before deployment-triggered runs and before execution; waiting investigations are cancelled.
 4. **Server-side only** — frontend controls call authenticated mutations; no target URL is accepted from an untrusted plan.
 5. **No arbitrary LLM execution** — the planner selects from a finite catalogue; no generated URL, method or payload is dispatched.
-6. **Evidence sanitation** — traveler email and PNR are masked; authorization/cookie/token fields are redacted before hashing.
+6. **Evidence sanitation** — redaction runs recursively through nested bodies, headers and arrays. Emails and PNR fields are masked; authorization, cookie, token, password, secret, API key, session and CSRF fields are redacted; bearer/JWT/key-shaped strings and `session=`/`csrf=`/`xsrf=` values are redacted inside free text. The stored canonical JSON is the exact text hashed with SHA-256.
+7. **Budget preflight** — a plan is blocked before dispatch when its declared request count cannot fit the plan or remaining run budget. Actual request counts are checked again after execution.
+8. **Concurrency** — only one concurrent execution attempt can consume an approval; repeated retests skip findings already marked `FIXED`, so retest evidence is not duplicated.
 
 ## Verification contract
 

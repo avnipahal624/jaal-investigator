@@ -847,6 +847,8 @@ const schema = defineSchema(
       planDigest: v.optional(v.string()),
       /** SHA-256 of target scope, policy and deployment version. */
       scopeDigest: v.optional(v.string()),
+      /** 2 = canonical sorted-key serialization; absent = pre-v2 legacy digest. */
+      digestVersion: v.optional(v.number()),
       /** Approval is stale after this timestamp and must be re-requested. */
       expiresAt: v.optional(v.number()),
       consumedAt: v.optional(v.number()),

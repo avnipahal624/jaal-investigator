@@ -68,7 +68,7 @@ Every agent row persists `status`, `currentTask`, `lastRunAt`, `durationMs`, `su
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-See [`docs/DAST_ARCHITECTURE.md`](docs/DAST_ARCHITECTURE.md) for the agent/state diagram and safety boundary, and [`docs/DAST_PHASE0_AUDIT.md`](docs/DAST_PHASE0_AUDIT.md) for the Phase 0 feature matrix, P0 fixes and residual risks.
+See [`docs/DAST_ARCHITECTURE.md`](docs/DAST_ARCHITECTURE.md) for the agent/state diagram and safety boundary, [`docs/DAST_PHASE0_AUDIT.md`](docs/DAST_PHASE0_AUDIT.md) for the Phase 0 feature matrix and residual risks, and [`docs/DAST_EXTERNAL_EXECUTION_DESIGN.md`](docs/DAST_EXTERNAL_EXECUTION_DESIGN.md) for the disabled external-runner design, and [`docs/DAST_PHASE1_UI_SECURITY.md`](docs/DAST_PHASE1_UI_SECURITY.md) for the Phase 1 UI and security preparation report.
 
 ## Synthetic travel lab
 
@@ -160,9 +160,10 @@ bunx vitest run
 
 Last verified run:
 
-- **358 tests passed** across **19 files**
+- **368 tests passed** across **21 files**
 - DAST engine: **14 tests** (all six vulnerable scenarios verify, all six fixed scenarios reject, scope/redirect/host/port/path/method/budget checks)
-- DAST integration: **15 tests** (seed, detect→discover→plan, optional AI advisory, approval refusal, plan-digest tamper, stale approval, replay, retest confirmation, execution/evidence/report, owner isolation, emergency stop, reset)
+- DAST integration: **18 tests** (seed, detect→discover→plan, optional AI advisory, approval refusal, plan-digest tamper, stale approval, replay, concurrent execution, policy invalidation, preflight budget, retest idempotency, execution/evidence/report, owner isolation, emergency stop, reset)
+- Canonical serialization and recursive redaction: **7 focused tests**
 - `bunx convex dev --once` and `bunx tsc -b --noEmit` complete with exit 0
 
 No browser interaction test has been run in this environment; visual review is still recommended.

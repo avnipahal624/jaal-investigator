@@ -2,6 +2,7 @@ import {
   ActionButton,
   Chip,
   ConfirmDialog,
+  LoadingState,
   PageHeader,
   Panel,
 } from "@/components/security/ui";
@@ -38,6 +39,10 @@ export default function SafetySettingsPage() {
   const resetLab = useMutation(api.dast.resetLab);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<"reset" | "stop" | null>(null);
+
+  if (safety === undefined) {
+    return <LoadingState label="Loading safety policy and audit history" />;
+  }
 
   if (!safety) {
     return (
@@ -100,7 +105,7 @@ export default function SafetySettingsPage() {
           <ShieldOff className="size-5 text-[#F87171]" />
           <div>
             <p className="text-[12px] font-semibold text-[#F87171]">Emergency stop is engaged</p>
-            <p className="text-[10px] text-[#b98b8f]">
+            <p className="text-[10px] text-[#F87171]">
               New and queued active tests are refused until the stop is released.
             </p>
           </div>
@@ -181,7 +186,7 @@ export default function SafetySettingsPage() {
                   />
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium text-[#d7e2ee]">
+                  <p className="text-[11px] font-medium text-[#E5EDF5]">
                     {policy?.emergencyStop ? "Stop is engaged" : "Stop is released"}
                   </p>
                   <p className="mt-0.5 max-w-lg text-[9px] leading-relaxed text-[#9FB3C8]">
@@ -206,7 +211,7 @@ export default function SafetySettingsPage() {
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 size-4 text-[#F5B942]" />
                 <div>
-                  <p className="text-[11px] text-[#d7e2ee]">
+                  <p className="text-[11px] text-[#E5EDF5]">
                     Lab mode:{" "}
                     <span className="font-mono text-[#F5B942]">{lab?.mode ?? "—"}</span>
                   </p>
@@ -240,7 +245,7 @@ export default function SafetySettingsPage() {
                           ? "bg-[#F5B942]"
                           : event.severity === "SUCCESS"
                             ? "bg-[#34D399]"
-                            : "bg-[#64B5F6]",
+                            : "bg-[#9FB3C8]",
                     )}
                   />
                   <div className="min-w-0 flex-1">
@@ -299,7 +304,7 @@ export default function SafetySettingsPage() {
                 ["Owner-scoped access", true],
               ].map(([label, enabled]) => (
                 <div key={String(label)} className="flex items-center justify-between px-3 py-2">
-                  <span className="text-[10px] text-[#a6b7c9]">{label}</span>
+                  <span className="text-[10px] text-[#C7D5E5]">{label}</span>
                   {enabled ? (
                     <CheckCircle2 className="size-3.5 text-[#34D399]" />
                   ) : (
@@ -517,7 +522,7 @@ function NumberField({
         max={max}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-1 h-7 w-full border border-[#2A3B55] bg-[#080f1a] px-2 font-mono text-[11px] text-[#E5EDF5] focus:border-[#2DD4BF]/60 focus:outline-none"
+        className="mt-1 h-7 w-full border border-[#2A3B55] bg-[#0A1526] px-2 font-mono text-[11px] text-[#E5EDF5] focus:border-[#2DD4BF]/60 focus:outline-none"
       />
       <span className="mt-1 block text-[8px] text-[#6B8199]">{hint}</span>
     </label>
