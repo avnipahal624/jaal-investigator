@@ -437,3 +437,96 @@
     background: #fff !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Agentic DAST security console
+ * ------------------------------------------------------------------------ */
+.security-grid {
+  background-color: #080d18;
+  background-image:
+    radial-gradient(circle at 18% -10%, rgba(39, 199, 184, 0.08), transparent 34%),
+    linear-gradient(rgba(83, 112, 144, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(83, 112, 144, 0.045) 1px, transparent 1px);
+  background-size: auto, 38px 38px, 38px 38px;
+}
+
+.security-grid ::selection {
+  background: rgba(39, 199, 184, 0.25);
+  color: #f3f6fc;
+}
+
+.security-grid input[type="number"] {
+  appearance: textfield;
+}
+
+.security-grid input[type="number"]::-webkit-inner-spin-button,
+.security-grid input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.security-grid ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.security-grid ::-webkit-scrollbar-track {
+  background: #080f1a;
+}
+
+.security-grid ::-webkit-scrollbar-thumb {
+  background: #24364c;
+}
+
+.security-grid ::-webkit-scrollbar-thumb:hover {
+  background: #35a9a2;
+}
+
+@media print {
+  .security-no-print {
+    display: none !important;
+  }
+
+  body:has(.security-report-print) .security-grid {
+    background: #fff !important;
+  }
+
+  body:has(.security-report-print) aside,
+  body:has(.security-report-print) header,
+  body:has(.security-report-print) footer {
+    display: none !important;
+  }
+
+  .security-report-print {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: #fff !important;
+    color: #111827 !important;
+    padding: 28px !important;
+  }
+
+  .security-report-print * {
+    color: #1f2937 !important;
+    border-color: #d1d5db !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .security-report-print pre,
+  .security-report-print code,
+  .security-report-print table {
+    background: #f8fafc !important;
+  }
+
+  .security-report-print h1,
+  .security-report-print h2,
+  .security-report-print h3,
+  .security-report-print strong {
+    color: #0b1220 !important;
+  }
+}
+

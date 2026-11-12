@@ -10,7 +10,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Lock, Radio } from "lucide-react";
 import type { ReactNode } from "react";
-import { Navigate } from "react-router";
+import { Link, Navigate } from "react-router";
 
 /**
  * Wraps a route that requires a signed-in user.
@@ -102,23 +102,21 @@ export function RequireAuth({
             You'll come straight back to this page once you're signed in.
           </CardContent>
           <CardFooter className="flex flex-col gap-2">
-            <Button className="w-full cursor-pointer" onClick={() => signInHref}>
-              Sign in
+            <Button asChild className="w-full cursor-pointer">
+              <Link to={signInHref}>Sign in</Link>
             </Button>
             <Button
+              asChild
               variant="outline"
               className="w-full cursor-pointer gap-2 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
-              onClick={() => simulationHref}
             >
-              <Radio className="size-4" />
-              Open simulation login
+              <Link to={simulationHref}>
+                <Radio className="size-4" />
+                Open simulation login
+              </Link>
             </Button>
-            <Button
-              variant="ghost"
-              className="w-full cursor-pointer text-muted-foreground"
-              onClick={() => "/"}
-            >
-              Back to home
+            <Button asChild variant="ghost" className="w-full cursor-pointer text-muted-foreground">
+              <Link to="/">Back to home</Link>
             </Button>
           </CardFooter>
         </Card>
