@@ -1,6 +1,7 @@
 import {
   ActionButton,
   Chip,
+  ConfirmDialog,
   FindingStatusBadge,
   KeyValue,
   MethodBadge,
@@ -37,18 +38,19 @@ export default function FindingDetailPage() {
   );
   const retest = useMutation(api.dast.retestFinding);
   const [busy, setBusy] = useState(false);
+  const [confirmRetest, setConfirmRetest] = useState(false);
   const [verification, setVerification] = useState<null | "match" | "mismatch" | "checking">(null);
 
   if (detail === undefined) {
-    return <div className="py-16 text-center text-[11px] text-[#7890a8]">Loading finding…</div>;
+    return <div className="py-16 text-center text-[11px] text-[#9FB3C8]">Loading finding…</div>;
   }
   if (!detail) {
     return (
-      <div className="border border-[#1b2a3e] bg-[#101827] p-8 text-center">
-        <p className="text-sm text-[#c7d3e2]">Finding not found.</p>
+      <div className="border border-[#24344F] bg-[#152238] p-8 text-center">
+        <p className="text-sm text-[#C7D5E5]">Finding not found.</p>
         <Link
           to="/security/vulnerabilities"
-          className="mt-3 inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#27C7B8]"
+          className="mt-3 inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#2DD4BF]"
         >
           <ArrowLeft className="size-3" /> Back to vulnerability center
         </Link>
@@ -83,7 +85,7 @@ export default function FindingDetailPage() {
   async function runRetest() {
     setBusy(true);
     try {
-      const result = await retest({ id: finding._id });
+      const result = await retest({ id: finding._id, confirmed: true });
       toast.success(`${result.findingId}: ${result.outcome}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Retest failed");
@@ -161,7 +163,10 @@ ${finding.remediation}
                 </ActionButton>
               </Link>
             )}
-            <ActionButton onClick={runRetest} disabled={busy || finding.status === "FIXED"}>
+            <ActionButton
+              onClick={() => setConfirmRetest(true)}
+              disabled={busy || finding.status === "FIXED"}
+            >
               <RefreshCw className={`size-3 ${busy ? "animate-spin" : ""}`} />
               {busy ? "Retesting…" : finding.status === "FIXED" ? "Fixed" : "Retest"}
             </ActionButton>
@@ -175,9 +180,9 @@ ${finding.remediation}
         <Chip tone="neutral">{finding.category}</Chip>
         <div className="flex items-center gap-1.5">
           <MethodBadge method={finding.method} />
-          <span className="font-mono text-[10px] text-[#c7d3e2]">{finding.path}</span>
+          <span className="font-mono text-[10px] text-[#C7D5E5]">{finding.path}</span>
         </div>
-        <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+        <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
           {finding.deploymentVersion} · discovered {relativeTime(finding.discoveredAt)}
         </span>
       </div>
@@ -185,33 +190,33 @@ ${finding.remediation}
       <div className="grid gap-4 xl:grid-cols-12">
         <div className="space-y-4 xl:col-span-8">
           <div className="grid gap-2.5 sm:grid-cols-3">
-            <div className="border border-[#1b2a3e] bg-[#101827] p-3">
-              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#60788f]">
+            <div className="border border-[#24344F] bg-[#152238] p-3">
+              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                 Business severity
               </p>
-              <p className="mt-1 text-lg font-semibold text-[#F05D67]">{finding.severity}</p>
+              <p className="mt-1 text-lg font-semibold text-[#F87171]">{finding.severity}</p>
             </div>
-            <div className="border border-[#1b2a3e] bg-[#101827] p-3">
-              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#60788f]">
+            <div className="border border-[#24344F] bg-[#152238] p-3">
+              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                 Technical severity
               </p>
-              <p className="mt-1 text-lg font-semibold text-[#F59E55]">
+              <p className="mt-1 text-lg font-semibold text-[#F5B942]">
                 {finding.technicalSeverity}
               </p>
             </div>
-            <div className="border border-[#1b2a3e] bg-[#101827] p-3">
-              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#60788f]">
+            <div className="border border-[#24344F] bg-[#152238] p-3">
+              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                 Verification confidence
               </p>
-              <p className="mt-1 text-lg font-semibold text-[#35C98A]">
+              <p className="mt-1 text-lg font-semibold text-[#34D399]">
                 {(finding.confidence * 100).toFixed(0)}%
               </p>
             </div>
           </div>
 
           <Panel title="Business impact" eyebrow="Triage">
-            <p className="text-[12px] leading-relaxed text-[#c7d3e2]">{finding.businessImpact}</p>
-            <div className="mt-4 grid gap-3 border-t border-[#1b2a3e] pt-4 sm:grid-cols-2">
+            <p className="text-[12px] leading-relaxed text-[#C7D5E5]">{finding.businessImpact}</p>
+            <div className="mt-4 grid gap-3 border-t border-[#24344F] pt-4 sm:grid-cols-2">
               <KeyValue label="Owner">{finding.ownerTeam}</KeyValue>
               <KeyValue label="Affected roles">
                 {finding.affectedRoles.map((role) => role.replaceAll("_", " ")).join(", ")}
@@ -225,21 +230,21 @@ ${finding.remediation}
             <ol className="space-y-3">
               {reproduction.map((step) => (
                 <li key={step.step} className="flex gap-3">
-                  <span className="flex size-6 shrink-0 items-center justify-center border border-[#24364c] bg-[#0b1421] font-mono text-[9px] text-[#27C7B8]">
+                  <span className="flex size-6 shrink-0 items-center justify-center border border-[#2A3B55] bg-[#0F1B2D] font-mono text-[9px] text-[#2DD4BF]">
                     {step.step}
                   </span>
                   <div>
                     <p className="text-[11px] leading-relaxed text-[#d7e2ee]">{step.action}</p>
-                    <p className="mt-1 font-mono text-[9px] text-[#526a81]">
+                    <p className="mt-1 font-mono text-[9px] text-[#6B8199]">
                       expected: {step.expected}
                     </p>
-                    <p className="font-mono text-[9px] text-[#91A3BB]">actual: {step.actual}</p>
+                    <p className="font-mono text-[9px] text-[#9FB3C8]">actual: {step.actual}</p>
                   </div>
                 </li>
               ))}
             </ol>
-            <div className="mt-4 border border-[#F05D67]/25 bg-[#F05D67]/5 p-3">
-              <p className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#F05D67]">
+            <div className="mt-4 border border-[#F87171]/25 bg-[#F87171]/5 p-3">
+              <p className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#F87171]">
                 <ShieldX className="size-3" /> Why this is verified
               </p>
               <p className="mt-1.5 text-[10px] leading-relaxed text-[#b98b8f]">
@@ -265,10 +270,10 @@ ${finding.remediation}
               </ActionButton>
             }
           >
-            <div className="mb-3 flex flex-col gap-2 border border-[#1e3145] bg-[#0b1421] p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mb-3 flex flex-col gap-2 border border-[#2A3B55] bg-[#0F1B2D] p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-2">
-                <Fingerprint className="size-4 shrink-0 text-[#35C98A]" />
-                <code className="truncate font-mono text-[9px] text-[#91A3BB]">
+                <Fingerprint className="size-4 shrink-0 text-[#34D399]" />
+                <code className="truncate font-mono text-[9px] text-[#9FB3C8]">
                   {finding.evidenceHash}
                 </code>
               </div>
@@ -289,7 +294,7 @@ ${finding.remediation}
                     void navigator.clipboard.writeText(finding.evidenceHash);
                     toast.success("Hash copied");
                   }}
-                  className="text-[#60788f] hover:text-[#F3F6FC]"
+                  className="text-[#7E93A8] hover:text-[#E5EDF5]"
                   aria-label="Copy hash"
                 >
                   <Clipboard className="size-3.5" />
@@ -298,23 +303,23 @@ ${finding.remediation}
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               <div>
-                <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#60788f]">
+                <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                   Request (sanitized)
                 </p>
-                <pre className="max-h-[260px] overflow-auto border border-[#1e3145] bg-[#080f1a] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
+                <pre className="max-h-[260px] overflow-auto border border-[#2A3B55] bg-[#080f1a] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
                   {finding.requestEvidence}
                 </pre>
               </div>
               <div>
-                <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#60788f]">
+                <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                   Response (sanitized)
                 </p>
-                <pre className="max-h-[260px] overflow-auto border border-[#1e3145] bg-[#080f1a] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
+                <pre className="max-h-[260px] overflow-auto border border-[#2A3B55] bg-[#080f1a] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
                   {finding.responseEvidence}
                 </pre>
               </div>
             </div>
-            <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+            <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
               Email, PNR, authorization and cookie fields are redacted. Only synthetic
               traveller records are present.
             </p>
@@ -323,18 +328,18 @@ ${finding.remediation}
           <Panel title="Remediation" eyebrow="Owner action">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#F59E55]">
+                <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#F5B942]">
                   Root cause hypothesis
                 </p>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-[#c7d3e2]">
+                <p className="mt-1.5 text-[11px] leading-relaxed text-[#C7D5E5]">
                   {finding.rootCause}
                 </p>
               </div>
               <div>
-                <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#35C98A]">
+                <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#34D399]">
                   Recommended fix
                 </p>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-[#c7d3e2]">
+                <p className="mt-1.5 text-[11px] leading-relaxed text-[#C7D5E5]">
                   {finding.remediation}
                 </p>
               </div>
@@ -346,7 +351,7 @@ ${finding.remediation}
           <Panel title="Finding record" eyebrow="Provenance">
             <dl className="space-y-3">
               <KeyValue label="Finding ID">
-                <span className="font-mono text-[10px] text-[#27C7B8]">{finding.findingId}</span>
+                <span className="font-mono text-[10px] text-[#2DD4BF]">{finding.findingId}</span>
               </KeyValue>
               <KeyValue label="Discovered">{formatTimestamp(finding.discoveredAt)}</KeyValue>
               <KeyValue label="Verified">{formatTimestamp(finding.verifiedAt)}</KeyValue>
@@ -357,20 +362,20 @@ ${finding.remediation}
 
           <Panel title={`Retest history (${retests.length})`} eyebrow="Fixed-config replay">
             {retests.length === 0 ? (
-              <div className="text-[10px] leading-relaxed text-[#60788f]">
+              <div className="text-[10px] leading-relaxed text-[#7E93A8]">
                 No retest yet. The retest button switches the synthetic lab to its fixed
                 configuration and replays the original approved test.
               </div>
             ) : (
               <div className="space-y-2">
                 {retests.map((retestRow) => (
-                  <div key={retestRow._id} className="border border-[#1e3145] bg-[#0b1421] p-2.5">
+                  <div key={retestRow._id} className="border border-[#2A3B55] bg-[#0F1B2D] p-2.5">
                     <div className="flex items-center justify-between">
                       <span
                         className={
                           retestRow.outcome === "FIXED"
-                            ? "text-[#35C98A]"
-                            : "text-[#F05D67]"
+                            ? "text-[#34D399]"
+                            : "text-[#F87171]"
                         }
                       >
                         {retestRow.outcome === "FIXED" ? (
@@ -383,15 +388,15 @@ ${finding.remediation}
                           </span>
                         )}
                       </span>
-                      <span className="font-mono text-[8px] text-[#526a81]">
+                      <span className="font-mono text-[8px] text-[#6B8199]">
                         {relativeTime(retestRow.completedAt)}
                       </span>
                     </div>
-                    <p className="mt-1 text-[9px] leading-relaxed text-[#7890a8]">
+                    <p className="mt-1 text-[9px] leading-relaxed text-[#9FB3C8]">
                       {retestRow.detail}
                     </p>
                     {retestRow.evidenceHash && (
-                      <p className="mt-1 truncate font-mono text-[7px] text-[#526a81]">
+                      <p className="mt-1 truncate font-mono text-[7px] text-[#6B8199]">
                         SHA-256 {retestRow.evidenceHash}
                       </p>
                     )}
@@ -402,17 +407,17 @@ ${finding.remediation}
           </Panel>
 
           <Panel title="Evidence artifacts" eyebrow="Chain of custody" flush>
-            <div className="divide-y divide-[#162436]">
+            <div className="divide-y divide-[#1B2C45]">
               {evidence.map((row) => (
                 <div key={row._id} className="px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#60788f]">
+                    <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E93A8]">
                       {row.type.replaceAll("_", " ")}
                     </span>
-                    <ShieldCheck className="size-3 text-[#35C98A]" />
+                    <ShieldCheck className="size-3 text-[#34D399]" />
                   </div>
-                  <p className="mt-1 text-[10px] text-[#c7d3e2]">{row.label}</p>
-                  <p className="mt-0.5 truncate font-mono text-[7px] text-[#526a81]">
+                  <p className="mt-1 text-[10px] text-[#C7D5E5]">{row.label}</p>
+                  <p className="mt-0.5 truncate font-mono text-[7px] text-[#6B8199]">
                     {row.sha256}
                   </p>
                 </div>
@@ -420,17 +425,31 @@ ${finding.remediation}
             </div>
           </Panel>
 
-          <div className="border border-[#1b2a3e] bg-[#0d1623] p-3">
-            <p className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#F5C96A]">
+          <div className="border border-[#24344F] bg-[#0F1B2D] p-3">
+            <p className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#F5B942]">
               <ShieldX className="size-3" /> Scoped disclosure
             </p>
-            <p className="mt-2 text-[10px] leading-relaxed text-[#7890a8]">
+            <p className="mt-2 text-[10px] leading-relaxed text-[#9FB3C8]">
               This finding was reproduced only against JAAL's isolated synthetic travel
               lab. It is not a claim about any production TBO endpoint.
             </p>
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmRetest}
+        onOpenChange={setConfirmRetest}
+        title="Retest this finding against the fixed lab?"
+        description="The lab switches to its fixed configuration and the approved control/attack pair is replayed. The retest writes new evidence and cannot modify the original finding evidence."
+        details={<span>{finding.findingId} · {finding.method} {finding.path}</span>}
+        confirmLabel="Run retest"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmRetest(false);
+          void runRetest();
+        }}
+      />
     </>
   );
 }

@@ -76,22 +76,22 @@ export const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATION
 export type DastSeverity = (typeof SEVERITY_ORDER)[number];
 
 export const SEVERITY_COLOR: Record<DastSeverity, string> = {
-  CRITICAL: "#F05D67",
-  HIGH: "#F59E55",
-  MEDIUM: "#F5C96A",
-  LOW: "#64B5F6",
-  INFORMATIONAL: "#91A3BB",
+  CRITICAL: "#F87171",
+  HIGH: "#F5B942",
+  MEDIUM: "#FBBF24",
+  LOW: "#60A5FA",
+  INFORMATIONAL: "#9FB3C8",
 };
 
 export const CLASSIFICATION_META = {
   ACTIVE: {
     label: "Active",
-    color: "#35C98A",
+    color: "#34D399",
     description: "Observed in authorized traffic and present in the discovered inventory.",
   },
   ZOMBIE: {
     label: "Zombie",
-    color: "#F59E55",
+    color: "#F5B942",
     description:
       "Still reachable but absent from legitimate traffic for the configured historical window.",
   },
@@ -102,34 +102,34 @@ export const CLASSIFICATION_META = {
   },
   UNKNOWN: {
     label: "Unknown",
-    color: "#91A3BB",
+    color: "#9FB3C8",
     description: "Insufficient observations to classify with confidence.",
   },
 } as const;
 export type DastClassification = keyof typeof CLASSIFICATION_META;
 
 export const FINDING_STATUS_META = {
-  SUSPECTED: { label: "Suspected", color: "#F5C96A" },
-  VERIFYING: { label: "Verifying", color: "#64B5F6" },
-  VERIFIED: { label: "Verified", color: "#F05D67" },
-  FALSE_POSITIVE: { label: "False positive", color: "#91A3BB" },
-  INCONCLUSIVE: { label: "Inconclusive", color: "#F59E55" },
+  SUSPECTED: { label: "Suspected", color: "#FBBF24" },
+  VERIFYING: { label: "Verifying", color: "#60A5FA" },
+  VERIFIED: { label: "Verified", color: "#F87171" },
+  FALSE_POSITIVE: { label: "False positive", color: "#9FB3C8" },
+  INCONCLUSIVE: { label: "Inconclusive", color: "#F5B942" },
   NEEDS_HUMAN_REVIEW: { label: "Needs review", color: "#B383F5" },
-  FIXED: { label: "Fixed", color: "#35C98A" },
-  STILL_VULNERABLE: { label: "Still vulnerable", color: "#F05D67" },
+  FIXED: { label: "Fixed", color: "#34D399" },
+  STILL_VULNERABLE: { label: "Still vulnerable", color: "#F87171" },
 } as const;
 
 export const INVESTIGATION_STATUS_META: Record<
   string,
   { label: string; color: string }
 > = {
-  QUEUED: { label: "Queued", color: "#91A3BB" },
-  RUNNING: { label: "Running", color: "#27C7B8" },
-  WAITING_FOR_APPROVAL: { label: "Awaiting approval", color: "#F5C96A" },
-  PAUSED: { label: "Paused", color: "#F59E55" },
-  COMPLETED: { label: "Completed", color: "#35C98A" },
-  FAILED: { label: "Failed", color: "#F05D67" },
-  CANCELLED: { label: "Cancelled", color: "#91A3BB" },
+  QUEUED: { label: "Queued", color: "#9FB3C8" },
+  RUNNING: { label: "Running", color: "#2DD4BF" },
+  WAITING_FOR_APPROVAL: { label: "Awaiting approval", color: "#F5B942" },
+  PAUSED: { label: "Paused", color: "#F5B942" },
+  COMPLETED: { label: "Completed", color: "#34D399" },
+  FAILED: { label: "Failed", color: "#F87171" },
+  CANCELLED: { label: "Cancelled", color: "#9FB3C8" },
 };
 
 export const STAGE_LABELS: Record<string, string> = {

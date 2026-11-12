@@ -1,16 +1,15 @@
 import {
   ActionButton,
-  Chip,
+  ConfirmDialog,
   EmptyState,
   FindingStatusBadge,
   MethodBadge,
   PageHeader,
-  Panel,
   SeverityBadge,
 } from "@/components/security/ui";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
-import { formatTimestamp, relativeTime, SEVERITY_ORDER } from "@/types/dast";
+import { relativeTime, SEVERITY_ORDER } from "@/types/dast";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowRight,
@@ -31,6 +30,7 @@ export default function VulnerabilitiesPage() {
   const [severity, setSeverity] = useState("ALL");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const rows = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -61,7 +61,7 @@ export default function VulnerabilitiesPage() {
   async function retest() {
     setBusy(true);
     try {
-      const result = await retestAll();
+      const result = await retestAll({ confirmed: true });
       toast.success(
         `Retest complete · ${result.fixed} fixed · ${result.stillVulnerable} still vulnerable`,
       );
@@ -79,7 +79,11 @@ export default function VulnerabilitiesPage() {
         title="Vulnerability center"
         description="Only candidates that passed an independent control + attack assertion appear here. Every row carries sanitized evidence, a SHA-256 hash, an owner and a retest history."
         actions={
-          <ActionButton variant="ghost" onClick={retest} disabled={busy || !findings?.length}>
+          <ActionButton
+            variant="ghost"
+            onClick={() => setConfirmOpen(true)}
+            disabled={busy || !findings?.length}
+          >
             <RefreshCw className={cn("size-3", busy && "animate-spin")} />
             {busy ? "Retesting…" : "Apply fix & retest all"}
           </ActionButton>
@@ -88,13 +92,13 @@ export default function VulnerabilitiesPage() {
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[
-          ["Verified findings", counts.total, "text-[#F3F6FC]"],
-          ["Critical", counts.critical, "text-[#F05D67]"],
-          ["Currently verified", counts.verified, "text-[#F59E55]"],
-          ["Fixed by retest", counts.fixed, "text-[#35C98A]"],
+          ["Verified findings", counts.total, "text-[#E5EDF5]"],
+          ["Critical", counts.critical, "text-[#F87171]"],
+          ["Currently verified", counts.verified, "text-[#F5B942]"],
+          ["Fixed by retest", counts.fixed, "text-[#34D399]"],
         ].map(([label, value, tone]) => (
-          <div key={String(label)} className="border border-[#1b2a3e] bg-[#101827] px-3 py-2.5">
-            <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#60788f]">
+          <div key={String(label)} className="border border-[#24344F] bg-[#152238] px-3 py-2.5">
+            <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
               {label}
             </p>
             <p className={cn("mt-1 text-xl font-semibold tabular-nums", String(tone))}>{value}</p>
@@ -102,15 +106,15 @@ export default function VulnerabilitiesPage() {
         ))}
       </div>
 
-      <div className="mt-4 border border-[#1b2a3e] bg-[#101827]">
-        <div className="flex flex-col gap-2 border-b border-[#1b2a3e] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-4 border border-[#24344F] bg-[#152238]">
+        <div className="flex flex-col gap-2 border-b border-[#24344F] p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#526a81]" />
+            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#6B8199]" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search finding, endpoint or owner…"
-              className="h-8 w-full border border-[#24364c] bg-[#0b1421] pl-8 pr-3 text-[11px] text-[#d7e2ee] placeholder:text-[#4d647a] focus:border-[#27C7B8]/60 focus:outline-none"
+              className="h-8 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[11px] text-[#d7e2ee] placeholder:text-[#4d647a] focus:border-[#2DD4BF]/60 focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -122,8 +126,8 @@ export default function VulnerabilitiesPage() {
                 className={cn(
                   "border px-2 py-1 font-mono text-[8px] uppercase tracking-[0.08em]",
                   severity === value
-                    ? "border-[#27C7B8]/50 bg-[#27C7B8]/10 text-[#27C7B8]"
-                    : "border-[#24364c] text-[#7890a8] hover:text-[#F3F6FC]",
+                    ? "border-[#2DD4BF]/50 bg-[#2DD4BF]/10 text-[#2DD4BF]"
+                    : "border-[#2A3B55] text-[#9FB3C8] hover:text-[#E5EDF5]",
                 )}
               >
                 {value}
@@ -151,7 +155,7 @@ export default function VulnerabilitiesPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] text-left">
               <thead>
-                <tr className="border-b border-[#1b2a3e] bg-[#0c1521]">
+                <tr className="border-b border-[#24344F] bg-[#0c1521]">
                   {[
                     "Finding",
                     "Vulnerability",
@@ -165,7 +169,7 @@ export default function VulnerabilitiesPage() {
                   ].map((header) => (
                     <th
                       key={header}
-                      className="whitespace-nowrap px-3 py-2 font-mono text-[8px] uppercase tracking-[0.11em] text-[#60788f]"
+                      className="whitespace-nowrap px-3 py-2 font-mono text-[8px] uppercase tracking-[0.11em] text-[#7E93A8]"
                     >
                       {header}
                     </th>
@@ -176,12 +180,12 @@ export default function VulnerabilitiesPage() {
                 {rows.map((finding) => (
                   <tr
                     key={finding._id}
-                    className="border-b border-[#162436] transition-colors last:border-b-0 hover:bg-[#121d2d]"
+                    className="border-b border-[#1B2C45] transition-colors last:border-b-0 hover:bg-[#1B2C45]"
                   >
                     <td className="px-3 py-2.5">
                       <Link
                         to={`/security/vulnerabilities/${finding._id}`}
-                        className="font-mono text-[9px] text-[#27C7B8] hover:text-[#5de0d4]"
+                        className="font-mono text-[9px] text-[#2DD4BF] hover:text-[#5EEAD4]"
                       >
                         {finding.findingId}
                       </Link>
@@ -193,7 +197,7 @@ export default function VulnerabilitiesPage() {
                       >
                         {finding.title}
                       </Link>
-                      <p className="mt-0.5 truncate font-mono text-[8px] uppercase tracking-[0.06em] text-[#526a81]">
+                      <p className="mt-0.5 truncate font-mono text-[8px] uppercase tracking-[0.06em] text-[#6B8199]">
                         {finding.category}
                       </p>
                     </td>
@@ -203,29 +207,29 @@ export default function VulnerabilitiesPage() {
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1.5">
                         <MethodBadge method={finding.method} />
-                        <span className="max-w-[150px] truncate font-mono text-[8px] text-[#91A3BB]">
+                        <span className="max-w-[150px] truncate font-mono text-[8px] text-[#9FB3C8]">
                           {finding.path}
                         </span>
                       </div>
                     </td>
-                    <td className="max-w-[230px] px-3 py-2.5 text-[9px] leading-relaxed text-[#7890a8]">
+                    <td className="max-w-[230px] px-3 py-2.5 text-[9px] leading-relaxed text-[#9FB3C8]">
                       <span className="line-clamp-2">{finding.businessImpact}</span>
                     </td>
                     <td className="px-3 py-2.5">
-                      <span className="inline-flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.06em] text-[#35C98A]">
+                      <span className="inline-flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.06em] text-[#34D399]">
                         <ShieldX className="size-3" /> {finding.status}
                       </span>
-                      <p className="mt-0.5 font-mono text-[7px] text-[#526a81]">
+                      <p className="mt-0.5 font-mono text-[7px] text-[#6B8199]">
                         {(finding.confidence * 100).toFixed(0)}% confidence
                       </p>
                     </td>
-                    <td className="max-w-[150px] px-3 py-2.5 text-[9px] text-[#91A3BB]">
+                    <td className="max-w-[150px] px-3 py-2.5 text-[9px] text-[#9FB3C8]">
                       <span className="line-clamp-2">{finding.ownerTeam}</span>
                     </td>
                     <td className="px-3 py-2.5">
                       <FindingStatusBadge status={finding.status} />
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[8px] text-[#526a81]">
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[8px] text-[#6B8199]">
                       {relativeTime(finding.discoveredAt)}
                     </td>
                   </tr>
@@ -233,7 +237,7 @@ export default function VulnerabilitiesPage() {
               </tbody>
             </table>
             {rows.length === 0 && (
-              <p className="p-6 text-center text-[11px] text-[#60788f]">
+              <p className="p-6 text-center text-[11px] text-[#7E93A8]">
                 No findings match the current filters.
               </p>
             )}
@@ -247,15 +251,33 @@ export default function VulnerabilitiesPage() {
           { icon: ShieldAlert, label: "Business impact", text: "Technical severity is stored separately from the travel-specific business consequence." },
           { icon: RefreshCw, label: "Retest evidence", text: "Retests replay the original approved test against the fixed lab configuration." },
         ].map((item) => (
-          <div key={item.label} className="flex gap-3 border border-[#1b2a3e] bg-[#0d1623] p-3">
-            <item.icon className="mt-0.5 size-4 shrink-0 text-[#27C7B8]" />
+          <div key={item.label} className="flex gap-3 border border-[#24344F] bg-[#0F1B2D] p-3">
+            <item.icon className="mt-0.5 size-4 shrink-0 text-[#2DD4BF]" />
             <div>
-              <p className="text-[11px] text-[#c7d3e2]">{item.label}</p>
-              <p className="mt-0.5 text-[10px] leading-relaxed text-[#60788f]">{item.text}</p>
+              <p className="text-[11px] text-[#C7D5E5]">{item.label}</p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-[#7E93A8]">{item.text}</p>
             </div>
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Apply the fixed configuration and retest?"
+        description="This switches the synthetic lab to FIXED and replays every verified finding. Only a passing control with no violation becomes FIXED. No external target is contacted."
+        details={
+          <span>
+            {counts.total} verified finding(s) will be replayed with fresh sanitized evidence.
+          </span>
+        }
+        confirmLabel="Apply fix & retest"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          void retest();
+        }}
+      />
     </>
   );
 }

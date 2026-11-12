@@ -68,7 +68,7 @@ Every agent row persists `status`, `currentTask`, `lastRunAt`, `durationMs`, `su
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-See [`docs/DAST_ARCHITECTURE.md`](docs/DAST_ARCHITECTURE.md) for the agent/state diagram and safety boundary.
+See [`docs/DAST_ARCHITECTURE.md`](docs/DAST_ARCHITECTURE.md) for the agent/state diagram and safety boundary, and [`docs/DAST_PHASE0_AUDIT.md`](docs/DAST_PHASE0_AUDIT.md) for the Phase 0 feature matrix, P0 fixes and residual risks.
 
 ## Synthetic travel lab
 
@@ -91,8 +91,9 @@ All six scenarios have a control and attack assertion. The controls also pass un
 - HTTPS only; GET and POST only; redirects disabled
 - Path scope: `/api/*`
 - Per-plan request budget and global run ceiling
-- Human approval required before active execution
-- Global emergency stop cancels queued/waiting work and blocks new runs
+- Human approval required before active execution; the approval is bound to SHA-256 plan and scope digests, expires after 30 minutes and is consumed once
+- A policy update cannot disable the approval gate
+- Global emergency stop expires pending and approved gates, cancels queued/waiting work and blocks new runs
 - Sanitized evidence: email, PNR, authorization, cookie and token fields are redacted
 - SHA-256 evidence hashes computed server-side from the sanitized exchange
 - Owner-scoped queries/mutations; cross-owner access is rejected
@@ -159,9 +160,9 @@ bunx vitest run
 
 Last verified run:
 
-- **350 tests passed** across **19 files**
-- DAST engine: **12 tests** (all six vulnerable scenarios verify, all six fixed scenarios reject, scope/redirect/host/path/method/budget checks)
-- DAST integration: **9 tests** (seed, detect→discover→plan, optional AI advisory, approval refusal, execution/evidence/report, retest, owner isolation, emergency stop, reset)
+- **358 tests passed** across **19 files**
+- DAST engine: **14 tests** (all six vulnerable scenarios verify, all six fixed scenarios reject, scope/redirect/host/port/path/method/budget checks)
+- DAST integration: **15 tests** (seed, detect→discover→plan, optional AI advisory, approval refusal, plan-digest tamper, stale approval, replay, retest confirmation, execution/evidence/report, owner isolation, emergency stop, reset)
 - `bunx convex dev --once` and `bunx tsc -b --noEmit` complete with exit 0
 
 No browser interaction test has been run in this environment; visual review is still recommended.
@@ -180,7 +181,7 @@ No browser interaction test has been run in this environment; visual review is s
 - Control + attack verification
 - Sanitized evidence + SHA-256 integrity
 - Reports, ticket-ready Markdown, browser PDF
-- Automated fixed-config retest
+- Automated fixed-config retest requiring explicit operator confirmation
 - Owner isolation, emergency stop, audit trail
 - Ten-page security console driven by live Convex data
 - Interactive knowledge graph and inferred OpenAPI export

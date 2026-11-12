@@ -3,7 +3,6 @@ import {
   Chip,
   EmptyState,
   PageHeader,
-  Panel,
 } from "@/components/security/ui";
 import { api } from "@/convex/_generated/api";
 import { sha256Hex } from "@/utils/hash";
@@ -122,15 +121,15 @@ export default function EvidenceVaultPage() {
         <Stat label="Algorithm" value="SHA-256" />
       </div>
 
-      <div className="mt-4 border border-[#1b2a3e] bg-[#101827]">
-        <div className="flex flex-col gap-2 border-b border-[#1b2a3e] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-4 border border-[#24344F] bg-[#152238]">
+        <div className="flex flex-col gap-2 border-b border-[#24344F] p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#526a81]" />
+            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#6B8199]" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search artifact, finding or hash…"
-              className="h-8 w-full border border-[#24364c] bg-[#0b1421] pl-8 pr-3 text-[11px] text-[#d7e2ee] placeholder:text-[#4d647a] focus:border-[#27C7B8]/60 focus:outline-none"
+              className="h-8 w-full border border-[#2A3B55] bg-[#0F1B2D] pl-8 pr-3 text-[11px] text-[#d7e2ee] placeholder:text-[#4d647a] focus:border-[#2DD4BF]/60 focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -141,8 +140,8 @@ export default function EvidenceVaultPage() {
                 onClick={() => setType(value)}
                 className={
                   type === value
-                    ? "border border-[#27C7B8]/50 bg-[#27C7B8]/10 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[#27C7B8]"
-                    : "border border-[#24364c] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[#7890a8] hover:text-[#F3F6FC]"
+                    ? "border border-[#2DD4BF]/50 bg-[#2DD4BF]/10 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[#2DD4BF]"
+                    : "border border-[#2A3B55] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[#9FB3C8] hover:text-[#E5EDF5]"
                 }
               >
                 {value.replaceAll("_", " ")}
@@ -158,14 +157,14 @@ export default function EvidenceVaultPage() {
               title="No evidence artifacts yet"
               body="Evidence appears only after a verified finding or a retest. Each artifact is the sanitized exchange that proves the assertion."
               action={
-                <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[#F5C96A]">
+                <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[#F5B942]">
                   <LockKeyhole className="size-3" /> Awaiting approved execution
                 </span>
               }
             />
           </div>
         ) : (
-          <div className="divide-y divide-[#162436]">
+          <div className="divide-y divide-[#1B2C45]">
             {rows.map((row) => {
               const state = checks[row._id];
               const isOpen = expanded === row._id;
@@ -173,19 +172,19 @@ export default function EvidenceVaultPage() {
                 <div key={row._id}>
                   <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
-                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center border border-[#35C98A]/30 bg-[#35C98A]/8">
-                        <Fingerprint className="size-3.5 text-[#35C98A]" />
+                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center border border-[#34D399]/30 bg-[#34D399]/8">
+                        <Fingerprint className="size-3.5 text-[#34D399]" />
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-[11px] text-[#d7e2ee]">{row.label}</p>
-                        <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.08em] text-[#526a81]">
+                        <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.08em] text-[#6B8199]">
                           {row.type.replaceAll("_", " ")} · {row.algorithm} ·{" "}
                           {relativeTime(row.createdAt)}
                           {row.findingId
                             ? ` · ${findingLabels.get(row.findingId) ?? "finding"}`
                             : ""}
                         </p>
-                        <p className="mt-1 max-w-[560px] truncate font-mono text-[8px] text-[#7890a8]">
+                        <p className="mt-1 max-w-[560px] truncate font-mono text-[8px] text-[#9FB3C8]">
                           {row.sha256}
                         </p>
                       </div>
@@ -212,23 +211,23 @@ export default function EvidenceVaultPage() {
                       <button
                         type="button"
                         onClick={() => setExpanded(isOpen ? null : row._id)}
-                        className="border border-[#24364c] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[#7890a8] hover:text-[#F3F6FC]"
+                        className="border border-[#2A3B55] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[#9FB3C8] hover:text-[#E5EDF5]"
                       >
                         {isOpen ? "Hide" : "Preview"}
                       </button>
                     </div>
                   </div>
                   {isOpen && (
-                    <div className="border-t border-[#162436] bg-[#080f1a] px-4 py-3">
+                    <div className="border-t border-[#1B2C45] bg-[#080f1a] px-4 py-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#60788f]">
+                        <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E93A8]">
                           Sanitized artifact · {formatTimestamp(row.createdAt)}
                         </p>
-                        <span className="flex items-center gap-1 font-mono text-[8px] text-[#526a81]">
+                        <span className="flex items-center gap-1 font-mono text-[8px] text-[#6B8199]">
                           <ShieldX className="size-3" /> traveller PII redacted
                         </span>
                       </div>
-                      <pre className="max-h-[300px] overflow-auto border border-[#1e3145] bg-[#0b1421] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
+                      <pre className="max-h-[300px] overflow-auto border border-[#2A3B55] bg-[#0F1B2D] p-3 font-mono text-[9px] leading-relaxed text-[#9fb4c9]">
                         {row.content}
                       </pre>
                     </div>
@@ -237,7 +236,7 @@ export default function EvidenceVaultPage() {
               );
             })}
             {rows.length === 0 && (
-              <p className="p-6 text-center text-[11px] text-[#60788f]">
+              <p className="p-6 text-center text-[11px] text-[#7E93A8]">
                 No artifacts match the current filters.
               </p>
             )}
@@ -245,12 +244,12 @@ export default function EvidenceVaultPage() {
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-4 border border-[#1b2a3e] bg-[#0d1623] px-3 py-2.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+      <div className="mt-3 flex flex-wrap gap-4 border border-[#24344F] bg-[#0F1B2D] px-3 py-2.5 font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
         <span className="flex items-center gap-1.5">
-          <Fingerprint className="size-3 text-[#35C98A]" /> SHA-256 recorded at capture
+          <Fingerprint className="size-3 text-[#34D399]" /> SHA-256 recorded at capture
         </span>
         <span className="flex items-center gap-1.5">
-          <LockKeyhole className="size-3 text-[#27C7B8]" /> Owner-scoped access
+          <LockKeyhole className="size-3 text-[#2DD4BF]" /> Owner-scoped access
         </span>
         <span className="flex items-center gap-1.5">
           <ShieldCheck className="size-3 text-[#64B5F6]" /> Verification recomputes content
@@ -262,9 +261,9 @@ export default function EvidenceVaultPage() {
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="border border-[#1b2a3e] bg-[#101827] px-3 py-2.5">
-      <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#60788f]">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-[#F3F6FC]">{value}</p>
+    <div className="border border-[#24344F] bg-[#152238] px-3 py-2.5">
+      <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-[#E5EDF5]">{value}</p>
     </div>
   );
 }

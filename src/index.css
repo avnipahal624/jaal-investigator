@@ -442,17 +442,22 @@
  * Agentic DAST security console
  * ------------------------------------------------------------------------ */
 .security-grid {
-  background-color: #080d18;
+  background-color: #0b1220;
   background-image:
-    radial-gradient(circle at 18% -10%, rgba(39, 199, 184, 0.08), transparent 34%),
-    linear-gradient(rgba(83, 112, 144, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(83, 112, 144, 0.045) 1px, transparent 1px);
+    radial-gradient(circle at 18% -10%, rgba(45, 212, 191, 0.07), transparent 34%),
+    linear-gradient(rgba(120, 145, 170, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 145, 170, 0.04) 1px, transparent 1px);
   background-size: auto, 38px 38px, 38px 38px;
 }
 
 .security-grid ::selection {
-  background: rgba(39, 199, 184, 0.25);
-  color: #f3f6fc;
+  background: rgba(45, 212, 191, 0.24);
+  color: #e5edf5;
+}
+
+.security-grid :focus-visible {
+  outline: 2px solid #2dd4bf;
+  outline-offset: 2px;
 }
 
 .security-grid input[type="number"] {
@@ -471,15 +476,15 @@
 }
 
 .security-grid ::-webkit-scrollbar-track {
-  background: #080f1a;
+  background: #0a1526;
 }
 
 .security-grid ::-webkit-scrollbar-thumb {
-  background: #24364c;
+  background: #2a3b55;
 }
 
 .security-grid ::-webkit-scrollbar-thumb:hover {
-  background: #35a9a2;
+  background: #2dd4bf;
 }
 
 @media print {

@@ -23,15 +23,15 @@ export default function ReportDetailPage() {
   );
 
   if (report === undefined) {
-    return <div className="py-16 text-center text-[11px] text-[#7890a8]">Loading report…</div>;
+    return <div className="py-16 text-center text-[11px] text-[#9FB3C8]">Loading report…</div>;
   }
   if (!report) {
     return (
-      <div className="border border-[#1b2a3e] bg-[#101827] p-8 text-center">
-        <p className="text-sm text-[#c7d3e2]">Report not found.</p>
+      <div className="border border-[#24344F] bg-[#152238] p-8 text-center">
+        <p className="text-sm text-[#C7D5E5]">Report not found.</p>
         <Link
           to="/security/reports"
-          className="mt-3 inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#27C7B8]"
+          className="mt-3 inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#2DD4BF]"
         >
           <ArrowLeft className="size-3" /> Back to reports
         </Link>
@@ -112,32 +112,32 @@ export default function ReportDetailPage() {
           <Chip tone="teal">
             <ShieldCheck className="size-3" /> synthetic lab
           </Chip>
-          <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+          <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
             Report ID {report._id}
           </span>
         </div>
       </div>
 
-      <div className="security-report-print mx-auto max-w-[900px] border border-[#1b2a3e] bg-[#0c1521] p-6 sm:p-8">
+      <div className="security-report-print mx-auto max-w-[900px] border border-[#24344F] bg-[#0c1521] p-6 sm:p-8">
         <div className="mb-6 flex items-center justify-between border-b border-[#1e3044] pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center border border-[#27C7B8]/40 bg-[#27C7B8]/10">
-              <span className="font-mono text-[10px] font-bold text-[#27C7B8]">JA</span>
+            <div className="flex size-8 items-center justify-center border border-[#2DD4BF]/40 bg-[#2DD4BF]/10">
+              <span className="font-mono text-[10px] font-bold text-[#2DD4BF]">JA</span>
             </div>
             <div>
-              <p className="text-[11px] font-bold tracking-[0.22em] text-[#F3F6FC]">JAAL</p>
-              <p className="font-mono text-[7px] uppercase tracking-[0.16em] text-[#60788f]">
+              <p className="text-[11px] font-bold tracking-[0.22em] text-[#E5EDF5]">JAAL</p>
+              <p className="font-mono text-[7px] uppercase tracking-[0.16em] text-[#7E93A8]">
                 Agentic DAST · verified investigation
               </p>
             </div>
           </div>
-          <div className="text-right font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+          <div className="text-right font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
             <p>Synthetic Travel Lab</p>
             <p>{formatTimestamp(report.generatedAt)}</p>
           </div>
         </div>
         <MarkdownView markdown={report.markdown} />
-        <div className="mt-8 flex items-center justify-between border-t border-[#1e3044] pt-3 font-mono text-[7px] uppercase tracking-[0.1em] text-[#526a81]">
+        <div className="mt-8 flex items-center justify-between border-t border-[#1e3044] pt-3 font-mono text-[7px] uppercase tracking-[0.1em] text-[#6B8199]">
           <span>Owner-scoped · sanitized evidence · no external targets</span>
           <span className="flex items-center gap-1">
             <Download className="size-3" /> {safeName}.pdf via browser print

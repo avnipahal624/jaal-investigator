@@ -7,7 +7,7 @@ function Inline({ text }: { text: string }) {
       {parts.map((part, index) => {
         if (part.startsWith("**") && part.endsWith("**")) {
           return (
-            <strong key={index} className="font-semibold text-[#F3F6FC]">
+            <strong key={index} className="font-semibold text-[#E5EDF5]">
               {part.slice(2, -2)}
             </strong>
           );
@@ -16,7 +16,7 @@ function Inline({ text }: { text: string }) {
           return (
             <code
               key={index}
-              className="border border-[#24364c] bg-[#0b1421] px-1 py-0.5 font-mono text-[0.9em] text-[#8fe8df]"
+              className="border border-[#2A3B55] bg-[#0F1B2D] px-1 py-0.5 font-mono text-[0.9em] text-[#8fe8df]"
             >
               {part.slice(1, -1)}
             </code>
@@ -53,11 +53,11 @@ export function MarkdownView({ markdown }: { markdown: string }) {
       blocks.push(
         <div key={`code-${index}`} className="my-4">
           {language && (
-            <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#526a81]">
+            <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#6B8199]">
               {language}
             </p>
           )}
-          <pre className="overflow-auto border border-[#1e3145] bg-[#080f1a] p-3 font-mono text-[10px] leading-relaxed text-[#9fb4c9]">
+          <pre className="overflow-auto border border-[#2A3B55] bg-[#080f1a] p-3 font-mono text-[10px] leading-relaxed text-[#9fb4c9]">
             {code.join("\n")}
           </pre>
         </div>,
@@ -85,7 +85,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
                 {header?.map((cell, cellIndex) => (
                   <th
                     key={cellIndex}
-                    className="px-2 py-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-[#7890a8]"
+                    className="px-2 py-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-[#9FB3C8]"
                   >
                     <Inline text={cell} />
                   </th>
@@ -94,7 +94,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
             </thead>
             <tbody>
               {body.map((row, rowIndex) => (
-                <tr key={rowIndex} className="border-b border-[#162436]">
+                <tr key={rowIndex} className="border-b border-[#1B2C45]">
                   {row.map((cell, cellIndex) => (
                     <td key={cellIndex} className="px-2 py-1.5 text-[#aebdcd]">
                       <Inline text={cell} />
@@ -111,7 +111,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
 
     if (line.startsWith("### ")) {
       blocks.push(
-        <h3 key={index} className="mb-2 mt-5 text-[13px] font-semibold text-[#F3F6FC]">
+        <h3 key={index} className="mb-2 mt-5 text-[13px] font-semibold text-[#E5EDF5]">
           <Inline text={line.slice(4)} />
         </h3>,
       );
@@ -119,14 +119,14 @@ export function MarkdownView({ markdown }: { markdown: string }) {
       blocks.push(
         <h2
           key={index}
-          className="mb-2 mt-6 border-t border-[#1e3044] pt-4 text-[15px] font-semibold text-[#F3F6FC]"
+          className="mb-2 mt-6 border-t border-[#1e3044] pt-4 text-[15px] font-semibold text-[#E5EDF5]"
         >
           <Inline text={line.slice(3)} />
         </h2>,
       );
     } else if (line.startsWith("# ")) {
       blocks.push(
-        <h1 key={index} className="mb-3 text-xl font-semibold text-[#F3F6FC]">
+        <h1 key={index} className="mb-3 text-xl font-semibold text-[#E5EDF5]">
           <Inline text={line.slice(2)} />
         </h1>,
       );
@@ -141,7 +141,7 @@ export function MarkdownView({ markdown }: { markdown: string }) {
           {items.map((item, itemIndex) => (
             <li
               key={itemIndex}
-              className="relative text-[11px] leading-relaxed text-[#aebdcd] before:absolute before:-left-3 before:text-[#27C7B8] before:content-['·']"
+              className="relative text-[11px] leading-relaxed text-[#aebdcd] before:absolute before:-left-3 before:text-[#2DD4BF] before:content-['·']"
             >
               <Inline text={item} />
             </li>

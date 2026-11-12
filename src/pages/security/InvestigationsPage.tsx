@@ -1,9 +1,7 @@
 import {
   ActionButton,
-  Chip,
   EmptyState,
   PageHeader,
-  Panel,
 } from "@/components/security/ui";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -64,7 +62,7 @@ export default function InvestigationsPage() {
       />
 
       {!bootstrap ? (
-        <div className="text-[11px] text-[#7890a8]">Loading security workspace…</div>
+        <div className="text-[11px] text-[#9FB3C8]">Loading security workspace…</div>
       ) : !rows || rows.length === 0 ? (
         <EmptyState
           icon={<Activity className="size-5" />}
@@ -89,7 +87,7 @@ export default function InvestigationsPage() {
               <Link
                 key={row._id}
                 to={`/security/investigations/${row._id}`}
-                className="group block border border-[#1b2a3e] bg-[#101827] transition-colors hover:border-[#2c455e]"
+                className="group block border border-[#24344F] bg-[#152238] transition-colors hover:border-[#2c455e]"
               >
                 <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
                   <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -110,7 +108,7 @@ export default function InvestigationsPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-[10px] text-[#27C7B8]">{row.caseId}</span>
+                        <span className="font-mono text-[10px] text-[#2DD4BF]">{row.caseId}</span>
                         <span
                           className="border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.1em]"
                           style={{
@@ -121,19 +119,19 @@ export default function InvestigationsPage() {
                         >
                           {meta.label}
                         </span>
-                        <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#526a81]">
+                        <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#6B8199]">
                           {row.trigger}
                         </span>
                       </div>
                       <p className="mt-1 truncate text-[12px] font-medium text-[#d7e2ee]">
                         {row.title}
                       </p>
-                      <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-[#7890a8]">
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-[#9FB3C8]">
                         {row.summary || `Current stage: ${STAGE_LABELS[row.stage] ?? row.stage}`}
                       </p>
                     </div>
                   </div>
-                  <div className="grid shrink-0 grid-cols-4 gap-3 border-t border-[#1b2a3e] pt-3 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+                  <div className="grid shrink-0 grid-cols-4 gap-3 border-t border-[#24344F] pt-3 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
                     <Mini label="Endpoints" value={endpoints} />
                     <Mini label="Plans" value={plans} />
                     <Mini label="Requests" value={requests} />
@@ -147,15 +145,15 @@ export default function InvestigationsPage() {
                     />
                   </div>
                   <div className="flex shrink-0 items-center justify-between gap-4 lg:flex-col lg:items-end">
-                    <span className="flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+                    <span className="flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
                       <Clock3 className="size-3" /> {relativeTime(row.startedAt)}
                     </span>
-                    <span className="flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#27C7B8]">
+                    <span className="flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#2DD4BF]">
                       Open record <ArrowRight className="size-3" />
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 border-t border-[#162436] px-4 py-2">
+                <div className="flex items-center gap-1 border-t border-[#1B2C45] px-4 py-2">
                   {["CHANGE_DETECTION", "DISCOVERY", "PLANNING", "SAFETY_REVIEW", "EXECUTION", "VERIFICATION", "REPORTING"].map(
                     (stage, index) => {
                       const stageIndex = [
@@ -175,9 +173,9 @@ export default function InvestigationsPage() {
                             className={cn(
                               "size-1.5 shrink-0 rounded-full",
                               done
-                                ? "bg-[#35C98A]"
+                                ? "bg-[#34D399]"
                                 : current
-                                  ? "bg-[#F5C96A]"
+                                  ? "bg-[#F5B942]"
                                   : "bg-[#26384f]",
                             )}
                           />
@@ -187,7 +185,7 @@ export default function InvestigationsPage() {
                               done
                                 ? "text-[#6e8a7d]"
                                 : current
-                                  ? "text-[#F5C96A]"
+                                  ? "text-[#F5B942]"
                                   : "text-[#415970]",
                             )}
                           >
@@ -211,11 +209,11 @@ export default function InvestigationsPage() {
           { icon: Layers3, label: "Evidence-bound", text: "Every verified finding links to a SHA-256 sealed HTTP exchange." },
           { icon: ShieldCheck, label: "Approval-gated", text: "Active tests stop at WAITING_FOR_APPROVAL until an operator approves." },
         ].map((item) => (
-          <div key={item.label} className="flex gap-3 border border-[#1b2a3e] bg-[#0d1623] p-3">
-            <item.icon className="mt-0.5 size-4 shrink-0 text-[#27C7B8]" />
+          <div key={item.label} className="flex gap-3 border border-[#24344F] bg-[#0F1B2D] p-3">
+            <item.icon className="mt-0.5 size-4 shrink-0 text-[#2DD4BF]" />
             <div>
-              <p className="text-[11px] text-[#c7d3e2]">{item.label}</p>
-              <p className="mt-0.5 text-[10px] leading-relaxed text-[#60788f]">{item.text}</p>
+              <p className="text-[11px] text-[#C7D5E5]">{item.label}</p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-[#7E93A8]">{item.text}</p>
             </div>
           </div>
         ))}
@@ -227,8 +225,8 @@ export default function InvestigationsPage() {
 function Mini({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="min-w-14">
-      <p className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#526a81]">{label}</p>
-      <p className="mt-0.5 text-[12px] font-medium text-[#c7d3e2]">{value}</p>
+      <p className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#6B8199]">{label}</p>
+      <p className="mt-0.5 text-[12px] font-medium text-[#C7D5E5]">{value}</p>
     </div>
   );
 }

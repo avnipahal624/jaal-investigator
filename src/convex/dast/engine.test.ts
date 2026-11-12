@@ -144,6 +144,31 @@ describe("target scope enforcement", () => {
     expect(excessive.ok).toBe(false);
   });
 
+  it("rejects non-default ports, encoded traversal and path-prefix lookalikes", () => {
+    const port = validateScope(TARGET, "GET", "https://lab.jaal.internal:8443/api/health");
+    expect(port.ok).toBe(false);
+    if (!port.ok) expect(port.reason).toMatch(/port/i);
+
+    const traversal = validateScope(
+      TARGET,
+      "GET",
+      "https://lab.jaal.internal/api/%2e%2e/admin",
+    );
+    expect(traversal.ok).toBe(false);
+
+    const lookalike = validateScope(TARGET, "GET", "/api-evil/bookings");
+    expect(lookalike.ok).toBe(false);
+  });
+
+  it("accepts a case-insensitive allowlisted host", () => {
+    const result = validateScope(
+      TARGET,
+      "GET",
+      "https://LAB.JAAL.INTERNAL/api/health",
+    );
+    expect(result.ok).toBe(true);
+  });
+
   it("rejects embedded credentials", () => {
     const result = validateScope(
       TARGET,

@@ -91,16 +91,16 @@ export default function DeploymentsPage() {
               );
               return (
                 <Panel key={deployment._id} flush>
-                  <div className="flex flex-col gap-3 border-b border-[#1b2a3e] p-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex flex-col gap-3 border-b border-[#24344F] p-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3">
                       <div
                         className={cn(
                           "flex size-9 shrink-0 items-center justify-center border",
                           deployment.status === "BASELINE"
-                            ? "border-[#2a3b52] bg-[#172235] text-[#91A3BB]"
+                            ? "border-[#2A3B55] bg-[#1B2C45] text-[#9FB3C8]"
                             : deployment.status === "INVESTIGATED"
-                              ? "border-[#35C98A]/35 bg-[#35C98A]/8 text-[#35C98A]"
-                              : "border-[#27C7B8]/35 bg-[#27C7B8]/8 text-[#27C7B8]",
+                              ? "border-[#34D399]/35 bg-[#34D399]/8 text-[#34D399]"
+                              : "border-[#2DD4BF]/35 bg-[#2DD4BF]/8 text-[#2DD4BF]",
                         )}
                       >
                         {deployment.status === "BASELINE" ? (
@@ -126,18 +126,18 @@ export default function DeploymentsPage() {
                             {deployment.status}
                           </Chip>
                         </div>
-                        <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.1em] text-[#60788f]">
+                        <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E93A8]">
                           {deployment.commit} · {deployment.source} ·{" "}
                           {relativeTime(deployment.receivedAt)}
                         </p>
-                        <p className="mt-1 font-mono text-[8px] text-[#526a81]">
+                        <p className="mt-1 font-mono text-[8px] text-[#6B8199]">
                           {formatTimestamp(deployment.receivedAt)}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {deployment.status !== "BASELINE" && (
-                        <span className="flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.1em] text-[#F59E55]">
+                        <span className="flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.1em] text-[#F5B942]">
                           <Timer className="size-3" /> priority {deployment.priorityScore}
                         </span>
                       )}
@@ -152,12 +152,12 @@ export default function DeploymentsPage() {
                   </div>
 
                   {deploymentChanges.length === 0 ? (
-                    <div className="flex items-center gap-2 px-4 py-3 text-[10px] text-[#60788f]">
-                      <CheckCircle2 className="size-3.5 text-[#35C98A]" />
+                    <div className="flex items-center gap-2 px-4 py-3 text-[10px] text-[#7E93A8]">
+                      <CheckCircle2 className="size-3.5 text-[#34D399]" />
                       Baseline manifest recorded. No changes to diff yet.
                     </div>
                   ) : (
-                    <div className="divide-y divide-[#162436]">
+                    <div className="divide-y divide-[#1B2C45]">
                       {deploymentChanges.map((change, index) => (
                         <div
                           key={`${change.path}-${index}`}
@@ -176,15 +176,15 @@ export default function DeploymentsPage() {
                               {change.type}
                             </Chip>
                             <div className="min-w-0">
-                              <p className="truncate font-mono text-[9px] text-[#c7d3e2]">
+                              <p className="truncate font-mono text-[9px] text-[#C7D5E5]">
                                 {change.method} {change.path}
                               </p>
-                              <p className="mt-0.5 text-[9px] leading-relaxed text-[#60788f]">
+                              <p className="mt-0.5 text-[9px] leading-relaxed text-[#7E93A8]">
                                 {change.detail}
                               </p>
                             </div>
                           </div>
-                          <span className="shrink-0 font-mono text-[8px] text-[#526a81]">
+                          <span className="shrink-0 font-mono text-[8px] text-[#6B8199]">
                             P{change.priority}
                           </span>
                         </div>
@@ -199,7 +199,7 @@ export default function DeploymentsPage() {
           <div className="space-y-4">
             <Panel title="Change summary" eyebrow="Latest release">
               {!latest || changes.length === 0 ? (
-                <p className="text-[10px] leading-relaxed text-[#60788f]">
+                <p className="text-[10px] leading-relaxed text-[#7E93A8]">
                   Send the synthetic deployment to compare the baseline against a release
                   that adds a shadow route and changes two authorization contracts.
                 </p>
@@ -211,12 +211,12 @@ export default function DeploymentsPage() {
                     ["Deprecated routes", changes.filter((change) => change.type === "DEPRECATED").length],
                   ].map(([label, value]) => (
                     <div key={String(label)} className="flex items-center justify-between">
-                      <span className="text-[10px] text-[#91A3BB]">{label}</span>
+                      <span className="text-[10px] text-[#9FB3C8]">{label}</span>
                       <span className="font-mono text-[12px] text-[#d7e2ee]">{value}</span>
                     </div>
                   ))}
-                  <div className="border-t border-[#1b2a3e] pt-3">
-                    <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#60788f]">
+                  <div className="border-t border-[#24344F] pt-3">
+                    <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E93A8]">
                       Affected business flows
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -244,9 +244,9 @@ export default function DeploymentsPage() {
             </Panel>
 
             <Panel title="Why scoped?" eyebrow="Not a full scan">
-              <div className="space-y-3 text-[10px] leading-relaxed text-[#7890a8]">
+              <div className="space-y-3 text-[10px] leading-relaxed text-[#9FB3C8]">
                 <div className="flex items-start gap-2">
-                  <Radar className="mt-0.5 size-3.5 shrink-0 text-[#27C7B8]" />
+                  <Radar className="mt-0.5 size-3.5 shrink-0 text-[#2DD4BF]" />
                   <p>
                     Only changed endpoints and their directly dependent business flows are
                     prioritized. Unchanged routes stay in inventory but do not receive
@@ -261,7 +261,7 @@ export default function DeploymentsPage() {
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-[#35C98A]" />
+                  <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-[#34D399]" />
                   <p>
                     Discovery remains read-only until the human approval gate. No payload
                     is sent to an external host.
@@ -270,11 +270,11 @@ export default function DeploymentsPage() {
               </div>
             </Panel>
 
-            <div className="border border-[#1b2a3e] bg-[#0d1623] p-3">
-              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#F59E55]">
+            <div className="border border-[#24344F] bg-[#0F1B2D] p-3">
+              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#F5B942]">
                 Synthetic release
               </p>
-              <p className="mt-1.5 text-[10px] leading-relaxed text-[#7890a8]">
+              <p className="mt-1.5 text-[10px] leading-relaxed text-[#9FB3C8]">
                 The release webhook is generated by the isolated lab. It is not connected
                 to a real CI/CD pipeline or TBO infrastructure.
               </p>

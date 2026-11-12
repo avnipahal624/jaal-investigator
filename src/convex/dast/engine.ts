@@ -278,11 +278,32 @@ export function validateScope(
   if (url.username || url.password) {
     return { ok: false, reason: "Credentials are not permitted in target URLs." };
   }
-  if (!target.allowedHosts.includes(url.hostname)) {
-    return { ok: false, reason: `Host ${url.hostname} is outside the authorized allowlist.` };
+  if (url.port && url.port !== "443") {
+    return { ok: false, reason: "Only the default HTTPS port is authorized." };
   }
-  if (!target.allowedPaths.some((prefix) => url.pathname.startsWith(prefix))) {
-    return { ok: false, reason: `Path ${url.pathname} is outside the authorized path scope.` };
+  const host = url.hostname.toLowerCase();
+  if (!target.allowedHosts.some((allowed) => allowed.toLowerCase() === host)) {
+    return { ok: false, reason: `Host ${host} is outside the authorized allowlist.` };
+  }
+  let decodedPath = url.pathname;
+  try {
+    decodedPath = decodeURIComponent(url.pathname);
+  } catch {
+    return { ok: false, reason: "Target path contains invalid encoding." };
+  }
+  const hasControlCharacter = Array.from(decodedPath).some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code < 32 || code === 127;
+  });
+  if (decodedPath.includes("..") || decodedPath.includes("\\") || hasControlCharacter) {
+    return { ok: false, reason: "Target path contains traversal or control characters." };
+  }
+  const inScope = target.allowedPaths.some((prefix) => {
+    const normalized = prefix.endsWith("/") ? prefix : `${prefix}/`;
+    return decodedPath === prefix || decodedPath.startsWith(normalized);
+  });
+  if (!inScope) {
+    return { ok: false, reason: `Path ${decodedPath} is outside the authorized path scope.` };
   }
   return { ok: true };
 }

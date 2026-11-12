@@ -63,7 +63,7 @@ sequenceDiagram
 | `dastFlows` | Business workflow relationships | `by_application_key` |
 | `dastInvestigations` | Case, stage, safety, stats | `by_owner_application`, `by_owner_status` |
 | `dastPlans` | Bounded, validated attack plans | `by_investigation` |
-| `dastApprovals` | Human decision record | `by_investigation_status` |
+| `dastApprovals` | Human decision record, plan/scope SHA-256 digests, expiry and consumption | `by_investigation_status` |
 | `dastExecutions` | Control + attack assertions | `by_investigation` |
 | `dastFindings` | Verified findings + remediation + retest state | `by_investigation`, `by_finding_id` |
 | `dastEvidence` | Sanitized artifact + SHA-256 | `by_finding`, `by_owner_created` |
@@ -75,7 +75,7 @@ sequenceDiagram
 ## Safety boundary
 
 1. **Plan validation** — method ∈ {GET, POST}, HTTPS only, exact host allowlist, `/api/*` scope, budget 1–20 per plan.
-2. **Approval** — `executeInvestigation` refuses unless an `APPROVED` approval row exists.
+2. **Approval** — `executeInvestigation` refuses unless an `APPROVED` row exists, its plan and scope digests still match, it has not expired, and it has not already been consumed. Approval is consumed before the first test, so a successful run cannot be replayed.
 3. **Emergency stop** — checked before deployment-triggered runs and before execution; waiting investigations are cancelled.
 4. **Server-side only** — frontend controls call authenticated mutations; no target URL is accepted from an untrusted plan.
 5. **No arbitrary LLM execution** — the planner selects from a finite catalogue; no generated URL, method or payload is dispatched.

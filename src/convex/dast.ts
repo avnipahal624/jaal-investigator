@@ -32,9 +32,18 @@ import {
 } from "./dast/engine";
 
 const DAY = 86_400_000;
+/** An approval is valid for one execution window only. */
+const APPROVAL_TTL_MS = 30 * 60_000;
+const RATE_WINDOW_MS = 60_000;
 
 type Ctx = MutationCtx;
 type AnyCtx = QueryCtx | MutationCtx;
+
+async function optionalOwner(ctx: AnyCtx): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.subject) return null;
+  return identity.subject.split("|")[0] ?? null;
+}
 
 async function appForOwner(ctx: AnyCtx, owner: string) {
   return await ctx.db
@@ -149,6 +158,13 @@ function requestBodyFor(route: LabRouteDefinition): Record<string, unknown> | un
   return probeBody(route) as Record<string, unknown> | undefined;
 }
 
+function redactString(value: string): string {
+  return value
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer [REDACTED]")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b/g, "[REDACTED_JWT]")
+    .replace(/\b(?:sk|pk|rk)_[A-Za-z0-9]{12,}\b/g, "[REDACTED_KEY]");
+}
+
 function sanitizeValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sanitizeValue);
   if (value && typeof value === "object") {
@@ -167,11 +183,124 @@ function sanitizeValue(value: unknown): unknown {
     }
     return out;
   }
-  return value;
+  return typeof value === "string" ? redactString(value) : value;
 }
 
 function evidenceJson(value: unknown): string {
   return JSON.stringify(sanitizeValue(value), null, 2);
+}
+
+/**
+ * Digest the immutable parts of an approved plan. Status and the optional Groq
+ * advisory are deliberately excluded: neither may alter what was approved.
+ */
+function canonicalPlans(plans: Doc<"dastPlans">[]) {
+  return [...plans]
+    .sort((a, b) => String(a._id).localeCompare(String(b._id)))
+    .map((plan) => ({
+      id: String(plan._id),
+      testKey: plan.testKey,
+      endpointId: plan.endpointId ? String(plan.endpointId) : null,
+      category: plan.category,
+      title: plan.title,
+      role: plan.role,
+      fixture: plan.fixture,
+      expected: plan.expected,
+      validation: plan.validation,
+      maxRequests: plan.maxRequests,
+      risk: plan.risk,
+    }));
+}
+
+async function computeApprovalDigests(
+  plans: Doc<"dastPlans">[],
+  investigation: Doc<"dastInvestigations">,
+  policy: Doc<"dastPolicies">,
+  target: Doc<"dastTargets">,
+  deployment: Doc<"dastDeployments"> | null,
+) {
+  const planPayload = JSON.stringify({
+    version: 1,
+    investigationId: String(investigation._id),
+    deploymentId: investigation.deploymentId ? String(investigation.deploymentId) : null,
+    plans: canonicalPlans(plans),
+  });
+  const scopePayload = JSON.stringify({
+    version: 1,
+    baseUrl: target.baseUrl,
+    allowedHosts: [...target.allowedHosts].sort(),
+    allowedPaths: [...target.allowedPaths].sort(),
+    scheme: target.scheme,
+    status: target.status,
+    methods: ["GET", "POST"],
+    allowRedirects: false,
+    maxRequestsPerRun: policy.maxRequestsPerRun,
+    deploymentVersion: deployment?.version ?? null,
+  });
+  return {
+    planDigest: await sha256Hex(planPayload),
+    scopeDigest: await sha256Hex(scopePayload),
+  };
+}
+
+function sameIds(a: readonly string[], b: readonly string[]) {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((value, index) => value === right[index]);
+}
+
+async function enforceRateLimit(
+  ctx: Ctx,
+  owner: string,
+  typePrefix: string,
+  max: number,
+) {
+  const since = Date.now() - RATE_WINDOW_MS;
+  const rows = await ctx.db
+    .query("dastAudit")
+    .withIndex("by_owner_at", (q) => q.eq("owner", owner).gte("at", since))
+    .collect();
+  if (rows.filter((row) => row.type.startsWith(typePrefix)).length >= max) {
+    throw new Error(
+      `Rate limit reached for ${typePrefix}. Wait a minute before retrying.`,
+    );
+  }
+}
+
+async function enforceConcurrency(
+  ctx: Ctx,
+  owner: string,
+  applicationId: Id<"dastApplications">,
+  policy: Doc<"dastPolicies">,
+  exceptInvestigationId?: Id<"dastInvestigations">,
+) {
+  const jobs = await ctx.db
+    .query("dastJobs")
+    .withIndex("by_owner", (q) => q.eq("owner", owner))
+    .collect();
+  const active = jobs.filter(
+    (job) =>
+      job.applicationId === applicationId &&
+      job.status === "RUNNING" &&
+      (job.leaseUntil ?? 0) > Date.now() &&
+      job.investigationId !== exceptInvestigationId,
+  );
+  if (active.length >= policy.maxConcurrency) {
+    throw new Error(
+      `Concurrency limit (${policy.maxConcurrency}) reached. Wait for the active investigation to finish.`,
+    );
+  }
+}
+
+async function plansForInvestigation(
+  ctx: AnyCtx,
+  investigationId: Id<"dastInvestigations">,
+) {
+  return await ctx.db
+    .query("dastPlans")
+    .withIndex("by_investigation", (q) => q.eq("investigationId", investigationId))
+    .collect();
 }
 
 async function seedForOwner(ctx: Ctx, owner: string, actor: string) {
@@ -723,18 +852,28 @@ async function runPipeline(
     success: true,
   });
 
-  const approvalStatus = policy.approvalRequired ? "PENDING" : "APPROVED";
+  // A human gate is mandatory for every active run. The policy field remains
+  // for display and migration compatibility, but it cannot disable this gate.
+  const plans = await plansForInvestigation(ctx, investigationId);
+  const target = await targetForApp(ctx, applicationId);
+  if (!target) throw new Error("Authorized target is missing.");
+  const digests = await computeApprovalDigests(
+    plans,
+    investigation,
+    policy,
+    target,
+    deployment,
+  );
   const approvalId = await ctx.db.insert("dastApprovals", {
     owner,
     investigationId,
     planIds,
-    status: approvalStatus,
+    status: "PENDING",
+    planDigest: digests.planDigest,
+    scopeDigest: digests.scopeDigest,
+    expiresAt: Date.now() + APPROVAL_TTL_MS,
     requestedAt: Date.now(),
-    decidedAt: policy.approvalRequired ? undefined : Date.now(),
-    decidedBy: policy.approvalRequired ? undefined : owner,
-    note: policy.approvalRequired
-      ? "Active tests require explicit operator approval."
-      : "Policy pre-approved the isolated synthetic lab.",
+    note: "Active tests require explicit operator approval of this exact plan and scope.",
   });
 
   const stats = {
@@ -752,17 +891,17 @@ async function runPipeline(
     status: "WAITING_FOR_APPROVAL",
     stage: "SAFETY_REVIEW",
     currentAgent: "safe-executor",
-    safetyStatus: policy.approvalRequired
-      ? "AWAITING_HUMAN_APPROVAL"
-      : "PRE_APPROVED_LAB",
-    stats,
+    safetyStatus: "AWAITING_HUMAN_APPROVAL",
+    stats: {
+      ...stats,
+      approvalDigest: digests.planDigest.slice(0, 16),
+      approvalExpiresAt: Date.now() + APPROVAL_TTL_MS,
+    },
     updatedAt: Date.now(),
   });
   await markAgent(ctx, applicationId, "safe-executor", {
     status: "WAITING_FOR_APPROVAL",
-    currentTask: policy.approvalRequired
-      ? "Waiting for operator approval"
-      : "Policy pre-approved",
+    currentTask: "Waiting for operator approval of the locked plan",
     lastRunAt: Date.now(),
     lastInvestigationId: investigationId,
   });
@@ -804,7 +943,11 @@ export const seedLab = mutation({
 export const bootstrap = query({
   args: {},
   handler: async (ctx) => {
-    const owner = await getOwner(ctx);
+    // Query may mount for a fraction of a second before the Convex auth token
+    // reaches the websocket. Return an empty bootstrap instead of throwing and
+    // taking the whole security shell down.
+    const owner = await optionalOwner(ctx);
+    if (!owner) return null;
     const app = await appForOwner(ctx, owner);
     if (!app) return null;
     const [target, policy, lab, agents, deployments, investigations, findings, endpoints] =
@@ -874,6 +1017,8 @@ export const triggerDeployment = mutation({
     if (policy.emergencyStop) {
       throw new Error("Emergency stop is active. No deployment-triggered run can start.");
     }
+    await enforceRateLimit(ctx, owner, "deployment.received", 10);
+    await enforceConcurrency(ctx, owner, app._id, policy);
     const requiredAgents = ["change-sentinel", "recon-inventory", "attack-planner"];
     for (const key of requiredAgents) {
       const agent = await ctx.db
@@ -987,6 +1132,11 @@ export const approveInvestigation = mutation({
     const identity = await ctx.auth.getUserIdentity();
     const investigation = await ctx.db.get(args.id);
     if (!investigation || investigation.owner !== owner) throw new Error("Investigation not found.");
+    if (investigation.status !== "WAITING_FOR_APPROVAL") {
+      throw new Error(
+        `Investigation is ${investigation.status}; a fresh approval can only be granted while it is awaiting approval.`,
+      );
+    }
     const approval = await ctx.db
       .query("dastApprovals")
       .withIndex("by_investigation_status", (q) =>
@@ -994,11 +1144,36 @@ export const approveInvestigation = mutation({
       )
       .first();
     if (!approval) throw new Error("No pending approval for this investigation.");
+    if (!approval.planDigest || !approval.scopeDigest) {
+      await ctx.db.patch(approval._id, { status: "EXPIRED" });
+      throw new Error("This approval was created without a plan/scope digest and cannot be used.");
+    }
+    const now = Date.now();
+    // The request may be old, but the human is approving the current digest now.
+    // Refresh the execution window; executeInvestigation enforces it.
+    const [plans, policy, target, deployment] = await Promise.all([
+      plansForInvestigation(ctx, args.id),
+      policyForApp(ctx, investigation.applicationId),
+      targetForApp(ctx, investigation.applicationId),
+      investigation.deploymentId ? ctx.db.get(investigation.deploymentId) : Promise.resolve(null),
+    ]);
+    if (!policy || !target) throw new Error("Safety configuration is incomplete.");
+    if (target.status !== "AUTHORIZED") throw new Error("Target is not authorized.");
+    if (!sameIds(plans.map((plan) => String(plan._id)), approval.planIds.map(String))) {
+      await ctx.db.patch(approval._id, { status: "EXPIRED" });
+      throw new Error("The plan set changed after approval was requested. Generate new plans.");
+    }
+    const digests = await computeApprovalDigests(plans, investigation, policy, target, deployment);
+    if (digests.planDigest !== approval.planDigest || digests.scopeDigest !== approval.scopeDigest) {
+      await ctx.db.patch(approval._id, { status: "EXPIRED" });
+      throw new Error("The plan or scope changed after approval was requested. Approval refused.");
+    }
     await ctx.db.patch(approval._id, {
       status: "APPROVED",
-      decidedAt: Date.now(),
+      expiresAt: now + APPROVAL_TTL_MS,
+      decidedAt: now,
       decidedBy: identity?.name ?? owner,
-      note: args.note ?? "Approved through the JAAL safety console.",
+      note: (args.note ?? "Approved through the JAAL safety console.").slice(0, 500),
     });
     await ctx.db.patch(args.id, {
       safetyStatus: "APPROVED_FOR_EXECUTION",
@@ -1027,19 +1202,26 @@ export const executeInvestigation = mutation({
     const actor = identity?.name ?? owner;
     const investigation = await ctx.db.get(args.id);
     if (!investigation || investigation.owner !== owner) throw new Error("Investigation not found.");
-    if (investigation.status === "COMPLETED") {
-      throw new Error("This investigation has already completed.");
-    }
-    if (investigation.status === "CANCELLED") {
-      throw new Error("This investigation was cancelled.");
+    if (investigation.status !== "WAITING_FOR_APPROVAL") {
+      throw new Error(
+        `Execution requires a fresh approval; investigation is ${investigation.status}.`,
+      );
     }
     const policy = await policyForApp(ctx, investigation.applicationId);
     const target = await targetForApp(ctx, investigation.applicationId);
     const lab = await labForApp(ctx, investigation.applicationId);
     if (!policy || !target || !lab) throw new Error("Safety configuration is incomplete.");
+    if (!policy.approvalRequired) {
+      throw new Error("Human approval cannot be disabled by policy.");
+    }
+    if (target.status !== "AUTHORIZED") {
+      throw new Error("Target is not in the AUTHORIZED state. Execution refused.");
+    }
     if (policy.emergencyStop) {
       throw new Error("Emergency stop is active. Execution refused.");
     }
+    await enforceRateLimit(ctx, owner, "safety.execution", 6);
+    await enforceConcurrency(ctx, owner, investigation.applicationId, policy, args.id);
     const executor = await ctx.db
       .query("dastAgents")
       .withIndex("by_application_key", (q) =>
@@ -1056,19 +1238,59 @@ export const executeInvestigation = mutation({
       )
       .first();
     if (!approval) throw new Error("Execution requires an approved safety gate.");
+    const now = Date.now();
+    if (approval.expiresAt != null && now > approval.expiresAt) {
+      await ctx.db.patch(approval._id, { status: "EXPIRED" });
+      throw new Error("Approval expired. Request a new approval before execution.");
+    }
+    if (!approval.planDigest || !approval.scopeDigest) {
+      await ctx.db.patch(approval._id, { status: "EXPIRED" });
+      throw new Error("Approval is not bound to a plan and scope digest. Execution refused.");
+    }
 
-    const plans = await ctx.db
-      .query("dastPlans")
-      .withIndex("by_investigation", (q) => q.eq("investigationId", args.id))
-      .collect();
+    const plans = await plansForInvestigation(ctx, args.id);
     if (plans.length === 0) throw new Error("No test plans exist.");
+    if (!sameIds(plans.map((plan) => String(plan._id)), approval.planIds.map(String))) {
+      await ctx.db.patch(approval._id, { status: "EXPIRED" });
+      throw new Error("The plan set does not match the approved plan set. Execution refused.");
+    }
+    if (plans.some((plan) => plan.status !== "READY")) {
+      throw new Error("Every approved plan must be READY before execution.");
+    }
+    const approvalDeployment = investigation.deploymentId
+      ? await ctx.db.get(investigation.deploymentId)
+      : null;
+    const digests = await computeApprovalDigests(
+      plans,
+      investigation,
+      policy,
+      target,
+      approvalDeployment,
+    );
+    if (digests.planDigest !== approval.planDigest || digests.scopeDigest !== approval.scopeDigest) {
+      await ctx.db.patch(approval._id, { status: "EXPIRED" });
+      throw new Error("The plan or scope changed after approval. Execution refused.");
+    }
 
+    // Consume the approval before any test runs. Convex mutations are atomic,
+    // so a thrown error rolls this back; a successful run cannot be replayed.
+    await ctx.db.patch(approval._id, { status: "CONSUMED", consumedAt: now });
     await ctx.db.patch(args.id, {
       status: "RUNNING",
       stage: "EXECUTION",
       currentAgent: "safe-executor",
       safetyStatus: "WITHIN_POLICY",
-      updatedAt: Date.now(),
+      updatedAt: now,
+    });
+    await audit(ctx, {
+      owner,
+      applicationId: investigation.applicationId,
+      investigationId: args.id,
+      type: "safety.execution.started",
+      actor,
+      message: `Approval ${String(approval._id)} consumed for ${plans.length} locked plan(s).`,
+      severity: "WARN",
+      metadata: { planDigest: approval.planDigest, scopeDigest: approval.scopeDigest },
     });
     await markAgent(ctx, investigation.applicationId, "safe-executor", {
       status: "RUNNING",
@@ -1144,7 +1366,68 @@ export const executeInvestigation = mutation({
         continue;
       }
 
-      const run = runDastTest(plan.testKey as DastTestKey, lab.mode);
+      let run: ReturnType<typeof runDastTest>;
+      try {
+        run = runDastTest(plan.testKey as DastTestKey, lab.mode);
+      } catch (error) {
+        rejectedPlans += 1;
+        await ctx.db.patch(plan._id, { status: "FAILED" });
+        await ctx.db.insert("dastExecutions", {
+          owner,
+          investigationId: args.id,
+          planId: plan._id,
+          testKey: plan.testKey,
+          status: "ERROR",
+          requestCount: 0,
+          startedAt: Date.now(),
+          completedAt: Date.now(),
+          assertions: {},
+          result: { violated: false, controlPassed: false },
+          error: error instanceof Error ? error.message : "Test execution failed.",
+        });
+        await audit(ctx, {
+          owner,
+          applicationId: investigation.applicationId,
+          investigationId: args.id,
+          type: "execution.error",
+          actor,
+          message: `${plan.testKey} failed before a result was recorded.`,
+          severity: "WARN",
+        });
+        continue;
+      }
+      if (
+        run.requestCount > plan.maxRequests ||
+        requestCount + run.requestCount > policy.maxRequestsPerRun
+      ) {
+        rejectedPlans += 1;
+        await ctx.db.patch(plan._id, { status: "REJECTED_BUDGET" });
+        await ctx.db.insert("dastExecutions", {
+          owner,
+          investigationId: args.id,
+          planId: plan._id,
+          testKey: plan.testKey,
+          status: "BLOCKED",
+          requestCount: 0,
+          startedAt: Date.now(),
+          completedAt: Date.now(),
+          assertions: {
+            reason: `Test would use ${run.requestCount} requests against a ${plan.maxRequests}-request plan budget.`,
+          },
+          result: { violated: false, controlPassed: false },
+          error: "Request budget exceeded; test was not persisted.",
+        });
+        await audit(ctx, {
+          owner,
+          applicationId: investigation.applicationId,
+          investigationId: args.id,
+          type: "safety.budget.blocked",
+          actor,
+          message: `Blocked ${plan.testKey}: actual request count exceeded the approved budget.`,
+          severity: "WARN",
+        });
+        continue;
+      }
       requestCount += run.requestCount;
       const executionId = await ctx.db.insert("dastExecutions", {
         owner,
@@ -1431,15 +1714,31 @@ async function performRetest(
 
 /** Apply the fixed lab configuration and replay one verified finding. */
 export const retestFinding = mutation({
-  args: { id: v.id("dastFindings") },
+  args: { id: v.id("dastFindings"), confirmed: v.boolean() },
   handler: async (ctx, args) => {
     const owner = await getOwner(ctx);
     const identity = await ctx.auth.getUserIdentity();
+    if (!args.confirmed) {
+      throw new Error("Retest requires explicit operator confirmation.");
+    }
     const finding = await ctx.db.get(args.id);
     if (!finding || finding.owner !== owner) throw new Error("Finding not found.");
     if (finding.status === "FIXED") {
       return { findingId: finding.findingId, outcome: "FIXED", detail: "Already fixed." };
     }
+    const policy = await policyForApp(ctx, finding.applicationId);
+    if (!policy) throw new Error("Safety policy is missing.");
+    if (policy.emergencyStop) {
+      throw new Error("Emergency stop is active. Retest refused.");
+    }
+    const retestAgent = await ctx.db
+      .query("dastAgents")
+      .withIndex("by_application_key", (q) =>
+        q.eq("applicationId", finding.applicationId).eq("key", "retest"),
+      )
+      .unique();
+    if (retestAgent?.paused) throw new Error("Automated Retest is paused.");
+    await enforceRateLimit(ctx, owner, "finding.retest", 10);
     await writeLabMode(ctx, finding.applicationId, "FIXED");
     await ctx.db.patch(finding.investigationId, {
       stage: "RETEST",
@@ -1469,12 +1768,28 @@ export const retestFinding = mutation({
 });
 
 export const retestAll = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { confirmed: v.boolean() },
+  handler: async (ctx, args) => {
     const owner = await getOwner(ctx);
     const identity = await ctx.auth.getUserIdentity();
+    if (!args.confirmed) {
+      throw new Error("Batch retest requires explicit operator confirmation.");
+    }
     const app = await appForOwner(ctx, owner);
     if (!app) throw new Error("No lab is initialized.");
+    const policy = await policyForApp(ctx, app._id);
+    if (!policy) throw new Error("Safety policy is missing.");
+    if (policy.emergencyStop) {
+      throw new Error("Emergency stop is active. Retest refused.");
+    }
+    const retestAgent = await ctx.db
+      .query("dastAgents")
+      .withIndex("by_application_key", (q) =>
+        q.eq("applicationId", app._id).eq("key", "retest"),
+      )
+      .unique();
+    if (retestAgent?.paused) throw new Error("Automated Retest is paused.");
+    await enforceRateLimit(ctx, owner, "finding.retest", 10);
     await writeLabMode(ctx, app._id, "FIXED");
     const findings = await ctx.db
       .query("dastFindings")
@@ -1576,7 +1891,10 @@ export const updatePolicy = mutation({
       }
       patch.rateLimitPerMinute = Math.round(args.rateLimitPerMinute);
     }
-    if (args.approvalRequired != null) patch.approvalRequired = args.approvalRequired;
+    if (args.approvalRequired === false) {
+      throw new Error("Human approval is mandatory for active tests and cannot be disabled.");
+    }
+    patch.approvalRequired = true;
     if (args.allowRedirects != null) patch.allowRedirects = false;
     if (args.zombieWindowDays != null) {
       if (args.zombieWindowDays < 1 || args.zombieWindowDays > 365) {
@@ -1625,13 +1943,36 @@ export const setEmergencyStop = mutation({
             safetyStatus: "EMERGENCY_STOP",
             updatedAt: Date.now(),
           });
-          const approval = await ctx.db
-            .query("dastApprovals")
-            .withIndex("by_investigation_status", (q) =>
-              q.eq("investigationId", investigation._id).eq("status", "PENDING"),
+          for (const status of ["PENDING", "APPROVED"] as const) {
+            const approval = await ctx.db
+              .query("dastApprovals")
+              .withIndex("by_investigation_status", (q) =>
+                q.eq("investigationId", investigation._id).eq("status", status),
+              )
+              .first();
+            if (approval) {
+              await ctx.db.patch(approval._id, {
+                status: "EXPIRED",
+                note: "Expired by emergency stop.",
+              });
+            }
+          }
+          const jobs = await ctx.db
+            .query("dastJobs")
+            .withIndex("by_investigation", (q) =>
+              q.eq("investigationId", investigation._id),
             )
-            .first();
-          if (approval) await ctx.db.patch(approval._id, { status: "EXPIRED" });
+            .collect();
+          for (const job of jobs) {
+            if (["RUNNING", "WAITING_FOR_APPROVAL"].includes(job.status)) {
+              await ctx.db.patch(job._id, {
+                status: "CANCELLED",
+                leaseUntil: undefined,
+                lastError: "Emergency stop engaged.",
+                updatedAt: Date.now(),
+              });
+            }
+          }
         }
       }
     }
@@ -1713,13 +2054,20 @@ export const setAgentControl = mutation({
             safetyStatus: "CANCELLED_BY_OPERATOR",
             updatedAt: Date.now(),
           });
-          const approval = await ctx.db
-            .query("dastApprovals")
-            .withIndex("by_investigation_status", (q) =>
-              q.eq("investigationId", agent.lastInvestigationId!).eq("status", "PENDING"),
-            )
-            .first();
-          if (approval) await ctx.db.patch(approval._id, { status: "EXPIRED" });
+          for (const status of ["PENDING", "APPROVED"] as const) {
+            const approval = await ctx.db
+              .query("dastApprovals")
+              .withIndex("by_investigation_status", (q) =>
+                q.eq("investigationId", agent.lastInvestigationId!).eq("status", status),
+              )
+              .first();
+            if (approval) {
+              await ctx.db.patch(approval._id, {
+                status: "EXPIRED",
+                note: "Expired by agent cancellation.",
+              });
+            }
+          }
         }
       }
     }
@@ -1853,11 +2201,6 @@ export const resetLab = mutation({
         .withIndex("by_investigation", (q) => q.eq("investigationId", investigation._id))
         .collect();
       for (const row of jobs) await ctx.db.delete(row._id);
-      const audits = await ctx.db
-        .query("dastAudit")
-        .withIndex("by_investigation", (q) => q.eq("investigationId", investigation._id))
-        .collect();
-      for (const row of audits) await ctx.db.delete(row._id);
       const findings = await ctx.db
         .query("dastFindings")
         .withIndex("by_investigation", (q) => q.eq("investigationId", investigation._id))
@@ -1879,11 +2222,6 @@ export const resetLab = mutation({
       .withIndex("by_owner_created", (q) => q.eq("owner", owner))
       .collect();
     for (const row of remainingEvidence) await ctx.db.delete(row._id);
-    const remainingAudit = await ctx.db
-      .query("dastAudit")
-      .withIndex("by_owner_at", (q) => q.eq("owner", owner))
-      .collect();
-    for (const row of remainingAudit) await ctx.db.delete(row._id);
     const config = await labForApp(ctx, appId);
     if (config) await ctx.db.delete(config._id);
     const policy = await policyForApp(ctx, appId);
@@ -1891,6 +2229,14 @@ export const resetLab = mutation({
     const target = await targetForApp(ctx, appId);
     if (target) await ctx.db.delete(target._id);
     await ctx.db.delete(appId);
+    await audit(ctx, {
+      owner,
+      type: "lab.reset",
+      actor: owner,
+      message:
+        "DAST workspace reset. Prior audit events were retained; original JAAL forensic data was not touched.",
+      severity: "WARN",
+    });
     return { reset: true };
   },
 });

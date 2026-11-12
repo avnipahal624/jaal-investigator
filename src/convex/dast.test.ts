@@ -71,6 +71,82 @@ describe("agentic DAST end-to-end", () => {
     expect(detail?.plans).toHaveLength(6);
   });
 
+  it("cannot disable the mandatory human approval gate", async () => {
+    const t = await seeded(setup());
+    await expect(
+      t.mutation(api.dast.updatePolicy, { approvalRequired: false }),
+    ).rejects.toThrow(/cannot be disabled/i);
+    const bootstrap = await t.query(api.dast.bootstrap, {});
+    expect(bootstrap?.policy?.approvalRequired).toBe(true);
+  });
+
+  it("rejects an approval after the locked plan is changed", async () => {
+    const t = await seeded(setup());
+    const deployment = await t.mutation(api.dast.triggerDeployment, {});
+    const detail = await t.query(api.dast.investigation, {
+      id: deployment.investigationId,
+    });
+    const planId = detail!.plans[0]._id;
+    await t.run(async (ctx) => {
+      await ctx.db.patch(planId, { maxRequests: 5 });
+    });
+    await expect(
+      t.mutation(api.dast.approveInvestigation, { id: deployment.investigationId }),
+    ).rejects.toThrow(/plan or scope changed/i);
+    const after = await t.query(api.dast.investigation, {
+      id: deployment.investigationId,
+    });
+    expect(after?.executions).toHaveLength(0);
+  });
+
+  it("rejects stale approval and duplicate execution", async () => {
+    const t = await seeded(setup());
+    const deployment = await t.mutation(api.dast.triggerDeployment, {});
+    await t.mutation(api.dast.approveInvestigation, { id: deployment.investigationId });
+    const detail = await t.query(api.dast.investigation, {
+      id: deployment.investigationId,
+    });
+    const approvalId = detail!.approvals[0]._id;
+    await t.run(async (ctx) => {
+      await ctx.db.patch(approvalId, { expiresAt: Date.now() - 1 });
+    });
+    await expect(
+      t.mutation(api.dast.executeInvestigation, { id: deployment.investigationId }),
+    ).rejects.toThrow(/expired/i);
+    const after = await t.query(api.dast.investigation, {
+      id: deployment.investigationId,
+    });
+    expect(after?.executions).toHaveLength(0);
+  });
+
+  it("consumes approval so a completed run cannot be replayed", async () => {
+    const t = await seeded(setup());
+    const deployment = await t.mutation(api.dast.triggerDeployment, {});
+    await t.mutation(api.dast.approveInvestigation, { id: deployment.investigationId });
+    await t.mutation(api.dast.executeInvestigation, { id: deployment.investigationId });
+    await expect(
+      t.mutation(api.dast.executeInvestigation, { id: deployment.investigationId }),
+    ).rejects.toThrow(/fresh approval|completed/i);
+    const detail = await t.query(api.dast.investigation, {
+      id: deployment.investigationId,
+    });
+    expect(detail?.executions).toHaveLength(6);
+    expect(detail?.findings).toHaveLength(6);
+    expect(detail?.approvals[0]?.status).toBe("CONSUMED");
+  });
+
+  it("requires explicit confirmation for retests", async () => {
+    const t = await seeded(setup());
+    const deployment = await t.mutation(api.dast.triggerDeployment, {});
+    await t.mutation(api.dast.approveInvestigation, { id: deployment.investigationId });
+    await t.mutation(api.dast.executeInvestigation, { id: deployment.investigationId });
+    await expect(
+      t.mutation(api.dast.retestAll, { confirmed: false }),
+    ).rejects.toThrow(/confirmation/i);
+    const findings = await t.query(api.dast.findings, {});
+    expect(findings.every((finding) => finding.status === "VERIFIED")).toBe(true);
+  });
+
   it("refuses active execution without approval", async () => {
     const t = await seeded(setup());
     const deployment = await t.mutation(api.dast.triggerDeployment, {});
@@ -133,7 +209,7 @@ describe("agentic DAST end-to-end", () => {
     await t.mutation(api.dast.approveInvestigation, { id: deployment.investigationId });
     await t.mutation(api.dast.executeInvestigation, { id: deployment.investigationId });
 
-    const retest = await t.mutation(api.dast.retestAll, {});
+    const retest = await t.mutation(api.dast.retestAll, { confirmed: true });
     expect(retest.fixed).toBe(6);
     expect(retest.stillVulnerable).toBe(0);
 
@@ -159,6 +235,21 @@ describe("agentic DAST end-to-end", () => {
     expect(await intruder.query(api.dast.findings, {})).toEqual([]);
   });
 
+  it("expires an already-approved gate when emergency stop is engaged", async () => {
+    const t = await seeded(setup());
+    const deployment = await t.mutation(api.dast.triggerDeployment, {});
+    await t.mutation(api.dast.approveInvestigation, { id: deployment.investigationId });
+    await t.mutation(api.dast.setEmergencyStop, { enabled: true });
+    await expect(
+      t.mutation(api.dast.executeInvestigation, { id: deployment.investigationId }),
+    ).rejects.toThrow(/cancelled|expired|emergency stop/i);
+    const detail = await t.query(api.dast.investigation, {
+      id: deployment.investigationId,
+    });
+    expect(detail?.investigation.status).toBe("CANCELLED");
+    expect(detail?.approvals[0]?.status).toBe("EXPIRED");
+  });
+
   it("blocks deployment-triggered work while emergency stop is engaged", async () => {
     const t = await seeded(setup());
     await t.mutation(api.dast.setEmergencyStop, { enabled: true });
@@ -179,5 +270,7 @@ describe("agentic DAST end-to-end", () => {
     expect(reset.reset).toBe(true);
     expect(await t.query(api.dast.bootstrap, {})).toBeNull();
     expect(await t.query(api.dast.findings, {})).toEqual([]);
+    const audit = await t.query(api.dast.auditLog, {});
+    expect(audit.some((event) => event.type === "lab.reset")).toBe(true);
   });
 });

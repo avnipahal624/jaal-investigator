@@ -9,7 +9,6 @@ import {
   Bot,
   Boxes,
   Braces,
-  CircleDot,
   Crosshair,
   FileText,
   Fingerprint,
@@ -23,7 +22,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
-  Waypoints,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -42,11 +40,11 @@ import {
 import { toast } from "sonner";
 
 const SEVERITY_COLORS: Record<string, string> = {
-  CRITICAL: "#F05D67",
-  HIGH: "#F59E55",
-  MEDIUM: "#F5C96A",
+  CRITICAL: "#F87171",
+  HIGH: "#F5B942",
+  MEDIUM: "#F5B942",
   LOW: "#64B5F6",
-  INFORMATIONAL: "#91A3BB",
+  INFORMATIONAL: "#9FB3C8",
 };
 
 const STAGES = [
@@ -123,7 +121,7 @@ export default function OverviewPage() {
 
   if (!bootstrap) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-[11px] text-[#7890a8]">
+      <div className="flex min-h-[60vh] items-center justify-center text-[11px] text-[#9FB3C8]">
         Loading security workspace…
       </div>
     );
@@ -154,7 +152,7 @@ export default function OverviewPage() {
                 <h2 className="mt-4 max-w-xl text-2xl font-semibold leading-tight tracking-[-0.02em]">
                   One deployment. Three ways an agency boundary can break.
                 </h2>
-                <p className="mt-3 max-w-xl text-[12px] leading-relaxed text-[#91A3BB]">
+                <p className="mt-3 max-w-xl text-[12px] leading-relaxed text-[#9FB3C8]">
                   JAAL will diff a release, discover the travel APIs itself, probe them
                   with synthetic roles, plan business-logic tests, stop for approval,
                   reproduce violations with a control request, seal SHA-256 evidence and
@@ -167,9 +165,9 @@ export default function OverviewPage() {
                     ["6", "attack modules"],
                     ["0", "external hosts"],
                   ].map(([value, label]) => (
-                    <div key={label} className="border border-[#22344a] bg-[#0b1421] px-3 py-2.5">
-                      <p className="text-xl font-semibold text-[#27C7B8]">{value}</p>
-                      <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#60788f]">
+                    <div key={label} className="border border-[#22344a] bg-[#0F1B2D] px-3 py-2.5">
+                      <p className="text-xl font-semibold text-[#2DD4BF]">{value}</p>
+                      <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#7E93A8]">
                         {label}
                       </p>
                     </div>
@@ -182,7 +180,7 @@ export default function OverviewPage() {
                   </ActionButton>
                   <Link
                     to="/security/settings"
-                    className="inline-flex h-8 items-center gap-1.5 border border-[#2a3b52] px-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[#91A3BB] hover:text-[#F3F6FC]"
+                    className="inline-flex h-8 items-center gap-1.5 border border-[#2A3B55] px-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[#9FB3C8] hover:text-[#E5EDF5]"
                   >
                     Review safety model
                   </Link>
@@ -195,16 +193,16 @@ export default function OverviewPage() {
               {STAGES.map((stage, index) => (
                 <div
                   key={stage}
-                  className="flex items-center gap-2 border border-[#1e3044] bg-[#0b1421] px-2.5 py-2"
+                  className="flex items-center gap-2 border border-[#1e3044] bg-[#0F1B2D] px-2.5 py-2"
                 >
-                  <span className="font-mono text-[8px] text-[#27C7B8]">
+                  <span className="font-mono text-[8px] text-[#2DD4BF]">
                     {String(index + 1).padStart(2, "0")}
                   </span>
                   <span className="text-[10px] text-[#b9c8d8]">{stage}</span>
                 </div>
               ))}
             </div>
-            <div className="mt-4 border-t border-[#1b2a3e] pt-3">
+            <div className="mt-4 border-t border-[#24344F] pt-3">
               <p className="font-mono text-[8px] uppercase leading-relaxed tracking-[0.13em] text-[#5f7692]">
                 Seven agents · one orchestrator · persistent job records · human approval
                 before every active test.
@@ -249,14 +247,14 @@ export default function OverviewPage() {
       {pending && data.latestInvestigation && (
         <Link
           to={`/security/investigations/${data.latestInvestigation._id}`}
-          className="mb-4 flex flex-col gap-3 border border-[#F5C96A]/35 bg-[#F5C96A]/6 px-4 py-3 transition-colors hover:bg-[#F5C96A]/10 sm:flex-row sm:items-center sm:justify-between"
+          className="mb-4 flex flex-col gap-3 border border-[#F5B942]/35 bg-[#F5B942]/6 px-4 py-3 transition-colors hover:bg-[#F5B942]/10 sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center border border-[#F5C96A]/40 bg-[#F5C96A]/10">
-              <ShieldAlert className="size-4 text-[#F5C96A]" />
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center border border-[#F5B942]/40 bg-[#F5B942]/10">
+              <ShieldAlert className="size-4 text-[#F5B942]" />
             </div>
             <div>
-              <p className="text-[12px] font-medium text-[#F5C96A]">
+              <p className="text-[12px] font-medium text-[#F5B942]">
                 {data.latestInvestigation.caseId} is paused at the safety gate
               </p>
               <p className="mt-0.5 text-[10px] text-[#b7a579]">
@@ -265,25 +263,25 @@ export default function OverviewPage() {
               </p>
             </div>
           </div>
-          <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#F5C96A]">
+          <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#F5B942]">
             Review approval <ArrowRight className="size-3" />
           </span>
         </Link>
       )}
 
       {demoOpen && (
-        <div className="mb-4 border border-[#27C7B8]/25 bg-[#0b1720] p-3">
+        <div className="mb-4 border border-[#2DD4BF]/25 bg-[#0b1720] p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-3.5 text-[#27C7B8]" />
-              <p className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#27C7B8]">
+              <Sparkles className="size-3.5 text-[#2DD4BF]" />
+              <p className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#2DD4BF]">
                 Guided synthetic demo
               </p>
             </div>
             <button
               type="button"
               onClick={() => setDemoOpen(false)}
-              className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81] hover:text-[#F3F6FC]"
+              className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199] hover:text-[#E5EDF5]"
             >
               Dismiss
             </button>
@@ -322,10 +320,10 @@ export default function OverviewPage() {
                 className={cn(
                   "border px-2.5 py-2",
                   step.done
-                    ? "border-[#35C98A]/30 bg-[#35C98A]/6"
+                    ? "border-[#34D399]/30 bg-[#34D399]/6"
                     : step.active
-                      ? "border-[#F5C96A]/40 bg-[#F5C96A]/8"
-                      : "border-[#1e3044] bg-[#0b1421]",
+                      ? "border-[#F5B942]/40 bg-[#F5B942]/8"
+                      : "border-[#1e3044] bg-[#0F1B2D]",
                 )}
               >
                 <p
@@ -334,13 +332,13 @@ export default function OverviewPage() {
                     step.done
                       ? "text-[#78b49a]"
                       : step.active
-                        ? "text-[#F5C96A]"
-                        : "text-[#7890a8]",
+                        ? "text-[#F5B942]"
+                        : "text-[#9FB3C8]",
                   )}
                 >
                   {step.label}
                 </p>
-                <p className="mt-1 text-[8px] text-[#526a81]">{step.note}</p>
+                <p className="mt-1 text-[8px] text-[#6B8199]">{step.note}</p>
               </div>
             ))}
           </div>
@@ -368,9 +366,9 @@ export default function OverviewPage() {
           <div className="relative h-[190px]">
             {severityData.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center text-center">
-                <ShieldCheck className="size-7 text-[#35C98A]" />
-                <p className="mt-2 text-[11px] text-[#91A3BB]">No findings yet</p>
-                <p className="mt-1 max-w-[160px] font-mono text-[8px] uppercase leading-relaxed tracking-[0.1em] text-[#526a81]">
+                <ShieldCheck className="size-7 text-[#34D399]" />
+                <p className="mt-2 text-[11px] text-[#9FB3C8]">No findings yet</p>
+                <p className="mt-1 max-w-[160px] font-mono text-[8px] uppercase leading-relaxed tracking-[0.1em] text-[#6B8199]">
                   Run the deployment investigation
                 </p>
               </div>
@@ -393,10 +391,10 @@ export default function OverviewPage() {
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        background: "#101827",
+                        background: "#152238",
                         border: "1px solid #26384f",
                         fontSize: 10,
-                        color: "#F3F6FC",
+                        color: "#E5EDF5",
                       }}
                     />
                   </PieChart>
@@ -410,17 +408,17 @@ export default function OverviewPage() {
               </>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-[#1b2a3e] pt-3">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-[#24344F] pt-3">
             {Object.entries(data.severityCounts).map(([severity, count]) => (
               <div key={severity} className="flex items-center justify-between text-[9px]">
-                <span className="flex items-center gap-1.5 text-[#91A3BB]">
+                <span className="flex items-center gap-1.5 text-[#9FB3C8]">
                   <span
                     className="size-1.5 rounded-full"
                     style={{ backgroundColor: SEVERITY_COLORS[severity] }}
                   />
                   {severity}
                 </span>
-                <span className="font-mono text-[#c7d3e2]">{String(count)}</span>
+                <span className="font-mono text-[#C7D5E5]">{String(count)}</span>
               </div>
             ))}
           </div>
@@ -437,36 +435,36 @@ export default function OverviewPage() {
               <AreaChart data={data.trends} margin={{ top: 8, right: 6, left: -24, bottom: 0 }}>
                 <defs>
                   <linearGradient id="totalFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#27C7B8" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#27C7B8" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#2DD4BF" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="#2DD4BF" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#1b2a3e" strokeDasharray="2 4" vertical={false} />
+                <CartesianGrid stroke="#24344F" strokeDasharray="2 4" vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: "#526a81", fontSize: 8, fontFamily: "monospace" }}
+                  tick={{ fill: "#6B8199", fontSize: 8, fontFamily: "monospace" }}
                   tickLine={false}
-                  axisLine={{ stroke: "#1b2a3e" }}
+                  axisLine={{ stroke: "#24344F" }}
                   tickFormatter={(value: string) => value.slice(5)}
                 />
                 <YAxis
                   allowDecimals={false}
-                  tick={{ fill: "#526a81", fontSize: 8, fontFamily: "monospace" }}
+                  tick={{ fill: "#6B8199", fontSize: 8, fontFamily: "monospace" }}
                   tickLine={false}
                   axisLine={false}
                 />
                 <Tooltip
                   contentStyle={{
-                    background: "#101827",
+                    background: "#152238",
                     border: "1px solid #26384f",
                     fontSize: 10,
-                    color: "#F3F6FC",
+                    color: "#E5EDF5",
                   }}
                 />
                 <Area
                   type="monotone"
                   dataKey="total"
-                  stroke="#27C7B8"
+                  stroke="#2DD4BF"
                   strokeWidth={1.5}
                   fill="url(#totalFill)"
                   name="Findings"
@@ -474,7 +472,7 @@ export default function OverviewPage() {
                 <Area
                   type="monotone"
                   dataKey="critical"
-                  stroke="#F05D67"
+                  stroke="#F87171"
                   strokeWidth={1.2}
                   fill="transparent"
                   name="Critical"
@@ -482,10 +480,10 @@ export default function OverviewPage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-2 grid grid-cols-4 gap-2 border-t border-[#1b2a3e] pt-3">
-            <MiniMetric label="Verified" value={data.verified} tone="text-[#F05D67]" />
-            <MiniMetric label="Retest success" value={data.retestSuccess == null ? "—" : `${Math.round(data.retestSuccess * 100)}%`} tone="text-[#35C98A]" />
-            <MiniMetric label="Reports" value={data.reportCount} tone="text-[#27C7B8]" />
+          <div className="mt-2 grid grid-cols-4 gap-2 border-t border-[#24344F] pt-3">
+            <MiniMetric label="Verified" value={data.verified} tone="text-[#F87171]" />
+            <MiniMetric label="Retest success" value={data.retestSuccess == null ? "—" : `${Math.round(data.retestSuccess * 100)}%`} tone="text-[#34D399]" />
+            <MiniMetric label="Reports" value={data.reportCount} tone="text-[#2DD4BF]" />
             <MiniMetric label="Deployments" value={data.deploymentCount} tone="text-[#64B5F6]" />
           </div>
         </Panel>
@@ -493,10 +491,10 @@ export default function OverviewPage() {
         <Panel className="xl:col-span-3" title="API inventory" eyebrow="Discovery quality">
           <div className="space-y-3">
             {[
-              ["Active", inventory.active, "#35C98A"],
-              ["Zombie", inventory.zombie, "#F59E55"],
+              ["Active", inventory.active, "#34D399"],
+              ["Zombie", inventory.zombie, "#F5B942"],
               ["Shadow", inventory.shadow, "#B383F5"],
-              ["Unknown", inventory.unknown, "#91A3BB"],
+              ["Unknown", inventory.unknown, "#9FB3C8"],
             ].map(([label, value, color]) => {
               const numeric = Number(value);
               const pct = data.endpointCount ? Math.round((numeric / data.endpointCount) * 100) : 0;
@@ -521,10 +519,10 @@ export default function OverviewPage() {
               );
             })}
           </div>
-          <div className="mt-4 border-t border-[#1b2a3e] pt-3">
+          <div className="mt-4 border-t border-[#24344F] pt-3">
             <Link
               to="/security/apis"
-              className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-[#27C7B8] hover:text-[#5de0d4]"
+              className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-[#2DD4BF] hover:text-[#5EEAD4]"
             >
               Open API explorer <ArrowRight className="size-3" />
             </Link>
@@ -538,36 +536,36 @@ export default function OverviewPage() {
           title="Live activity"
           eyebrow="Backend audit stream"
           action={
-            <span className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#35C98A]">
-              <span className="size-1.5 rounded-full bg-[#35C98A]" /> reactive
+            <span className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#34D399]">
+              <span className="size-1.5 rounded-full bg-[#34D399]" /> reactive
             </span>
           }
           flush
         >
           <div className="max-h-[300px] overflow-y-auto">
             {data.activity.length === 0 ? (
-              <p className="p-4 text-[11px] text-[#60788f]">No audit events yet.</p>
+              <p className="p-4 text-[11px] text-[#7E93A8]">No audit events yet.</p>
             ) : (
               data.activity.map((event) => (
                 <div
                   key={event._id}
-                  className="flex items-start gap-3 border-b border-[#162436] px-4 py-2.5 last:border-b-0"
+                  className="flex items-start gap-3 border-b border-[#1B2C45] px-4 py-2.5 last:border-b-0"
                 >
                   <span
                     className={cn(
                       "mt-1 size-1.5 shrink-0 rounded-full",
                       event.severity === "CRITICAL"
-                        ? "bg-[#F05D67]"
+                        ? "bg-[#F87171]"
                         : event.severity === "WARN"
-                          ? "bg-[#F5C96A]"
+                          ? "bg-[#F5B942]"
                           : event.severity === "SUCCESS"
-                            ? "bg-[#35C98A]"
+                            ? "bg-[#34D399]"
                             : "bg-[#64B5F6]",
                     )}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] leading-snug text-[#c7d3e2]">{event.message}</p>
-                    <p className="mt-0.5 flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+                    <p className="text-[11px] leading-snug text-[#C7D5E5]">{event.message}</p>
+                    <p className="mt-0.5 flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
                       <span>{event.type}</span>
                       <span>·</span>
                       <span>{event.actor}</span>
@@ -582,29 +580,29 @@ export default function OverviewPage() {
         </Panel>
 
         <Panel className="xl:col-span-5" title="Agent execution" eyebrow="Seven-agent pipeline" flush>
-          <div className="divide-y divide-[#162436]">
+          <div className="divide-y divide-[#1B2C45]">
             {data.agents.map((agent) => (
               <div key={agent.key} className="flex items-center gap-3 px-4 py-2.5">
-                <div className="flex size-7 items-center justify-center border border-[#24364c] bg-[#0b1421]">
+                <div className="flex size-7 items-center justify-center border border-[#2A3B55] bg-[#0F1B2D]">
                   {agent.key === "change-sentinel" ? (
                     <GitBranch className="size-3.5 text-[#64B5F6]" />
                   ) : agent.key === "recon-inventory" ? (
-                    <Radar className="size-3.5 text-[#27C7B8]" />
+                    <Radar className="size-3.5 text-[#2DD4BF]" />
                   ) : agent.key === "attack-planner" ? (
                     <Crosshair className="size-3.5 text-[#B383F5]" />
                   ) : agent.key === "safe-executor" ? (
-                    <ShieldCheck className="size-3.5 text-[#35C98A]" />
+                    <ShieldCheck className="size-3.5 text-[#34D399]" />
                   ) : agent.key === "verification" ? (
-                    <Fingerprint className="size-3.5 text-[#F5C96A]" />
+                    <Fingerprint className="size-3.5 text-[#F5B942]" />
                   ) : agent.key === "triage-reporting" ? (
                     <FileTextIcon />
                   ) : (
-                    <RefreshCw className="size-3.5 text-[#F59E55]" />
+                    <RefreshCw className="size-3.5 text-[#F5B942]" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[10px] text-[#c7d3e2]">{agent.name}</p>
-                  <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+                  <p className="truncate text-[10px] text-[#C7D5E5]">{agent.name}</p>
+                  <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
                     {agent.durationMs ? `${agent.durationMs} ms` : "not run"}
                   </p>
                 </div>
@@ -612,14 +610,14 @@ export default function OverviewPage() {
                   className={cn(
                     "font-mono text-[8px] uppercase tracking-[0.1em]",
                     agent.status === "COMPLETED"
-                      ? "text-[#35C98A]"
+                      ? "text-[#34D399]"
                       : agent.status === "RUNNING"
-                        ? "text-[#27C7B8]"
+                        ? "text-[#2DD4BF]"
                         : agent.status === "WAITING_FOR_APPROVAL"
-                          ? "text-[#F5C96A]"
+                          ? "text-[#F5B942]"
                           : agent.status === "FAILED"
-                            ? "text-[#F05D67]"
-                            : "text-[#60788f]",
+                            ? "text-[#F87171]"
+                            : "text-[#7E93A8]",
                   )}
                 >
                   {agent.status.replaceAll("_", " ")}
@@ -627,10 +625,10 @@ export default function OverviewPage() {
               </div>
             ))}
           </div>
-          <div className="border-t border-[#1b2a3e] p-3">
+          <div className="border-t border-[#24344F] p-3">
             <Link
               to="/security/agents"
-              className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-[#27C7B8] hover:text-[#5de0d4]"
+              className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-[#2DD4BF] hover:text-[#5EEAD4]"
             >
               Open agent control center <ArrowRight className="size-3" />
             </Link>
@@ -648,16 +646,16 @@ export default function OverviewPage() {
           <Link
             key={item.label}
             to={item.link}
-            className="group flex items-center gap-3 border border-[#1b2a3e] bg-[#101827] px-3 py-3 transition-colors hover:border-[#2a435b]"
+            className="group flex items-center gap-3 border border-[#24344F] bg-[#152238] px-3 py-3 transition-colors hover:border-[#2a435b]"
           >
-            <item.icon className="size-4 text-[#27C7B8]" />
+            <item.icon className="size-4 text-[#2DD4BF]" />
             <div className="min-w-0">
-              <p className="text-[11px] text-[#c7d3e2]">{item.label}</p>
-              <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">
+              <p className="text-[11px] text-[#C7D5E5]">{item.label}</p>
+              <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">
                 {item.value}
               </p>
             </div>
-            <ArrowRight className="ml-auto size-3 text-[#3d5369] group-hover:text-[#27C7B8]" />
+            <ArrowRight className="ml-auto size-3 text-[#3d5369] group-hover:text-[#2DD4BF]" />
           </Link>
         ))}
       </div>
@@ -668,12 +666,12 @@ export default function OverviewPage() {
 function MiniMetric({ label, value, tone }: { label: string; value: React.ReactNode; tone: string }) {
   return (
     <div>
-      <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#526a81]">{label}</p>
+      <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#6B8199]">{label}</p>
       <p className={cn("mt-0.5 text-[13px] font-semibold", tone)}>{value}</p>
     </div>
   );
 }
 
 function FileTextIcon() {
-  return <FileText className="size-3.5 text-[#27C7B8]" />;
+  return <FileText className="size-3.5 text-[#2DD4BF]" />;
 }

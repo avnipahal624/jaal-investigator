@@ -841,7 +841,15 @@ const schema = defineSchema(
         v.literal("APPROVED"),
         v.literal("DENIED"),
         v.literal("EXPIRED"),
+        v.literal("CONSUMED"),
       ),
+      /** SHA-256 of the immutable plan fields; detects plan replacement. */
+      planDigest: v.optional(v.string()),
+      /** SHA-256 of target scope, policy and deployment version. */
+      scopeDigest: v.optional(v.string()),
+      /** Approval is stale after this timestamp and must be re-requested. */
+      expiresAt: v.optional(v.number()),
+      consumedAt: v.optional(v.number()),
       requestedAt: v.number(),
       decidedAt: v.optional(v.number()),
       decidedBy: v.optional(v.string()),
