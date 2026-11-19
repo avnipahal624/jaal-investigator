@@ -73,7 +73,7 @@ export function NetworkBackdrop() {
           const dist = Math.hypot(dx, dy);
           if (dist < LINK_DIST) {
             const alpha = (1 - dist / LINK_DIST) * 0.28;
-            ctx.strokeStyle = `rgba(57, 214, 232, ${alpha})`;
+            ctx.strokeStyle = `rgba(111, 215, 255, ${alpha})`;
             ctx.lineWidth = 0.7;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
@@ -83,7 +83,7 @@ export function NetworkBackdrop() {
         }
       }
       for (const n of nodes) {
-        ctx.fillStyle = "rgba(57, 214, 232, 0.55)";
+        ctx.fillStyle = "rgba(111, 215, 255, 0.62)";
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
         ctx.fill();
@@ -103,7 +103,7 @@ export function NetworkBackdrop() {
   return (
     <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
       <canvas ref={canvasRef} className="absolute inset-0 size-full" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#06131C_82%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#050B18_84%)]" />
       <div className="jaal-grid absolute inset-0 opacity-70" />
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-jcyan/50 to-transparent" />
     </div>

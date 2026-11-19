@@ -73,7 +73,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
     state.user?.name ?? authUser?.name ?? authUser?.email ?? "Operator";
 
   return (
-    <header className="jaal-no-print sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-jborder/70 bg-jsurface/95 px-3 backdrop-blur sm:px-4">
+    <header className="metal-topbar jaal-no-print sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b px-3 sm:px-4">
       <button
         type="button"
         aria-label="Open navigation"

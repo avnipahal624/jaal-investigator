@@ -26,8 +26,8 @@ const NAV = [
 export function SidebarBrand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-3 px-1">
-      <div className="relative flex size-9 shrink-0 items-center justify-center border border-jcyan/50 bg-jcyan/10">
-        <span className="font-mono text-sm font-semibold text-jcyan">JA</span>
+      <div className="jaal-logo-metal relative flex size-9 shrink-0 items-center justify-center rounded-sm">
+        <span className="font-mono text-sm font-semibold">JA</span>
         <span className="absolute -right-1 -top-1 size-1.5 bg-jamber jaal-pulse" />
       </div>
       {!compact && (
@@ -63,7 +63,7 @@ export function SidebarContent({
         to="/investigations/new"
         onClick={onNavigate}
         className={cn(
-          "group flex items-center gap-2 border border-jcyan/40 bg-jcyan/10 px-3 py-2.5 text-sm font-medium text-jcyan transition-colors hover:bg-jcyan/20",
+          "metal-button group flex items-center gap-2 rounded-sm px-3 py-2.5 text-sm font-semibold",
           collapsed && "justify-center px-0",
         )}
       >
@@ -84,7 +84,7 @@ export function SidebarContent({
               cn(
                 "relative flex items-center gap-3 px-3 py-2 text-sm transition-colors",
                 isActive
-                  ? "bg-accent text-jcyan"
+                  ? "border border-jcyan/20 bg-[linear-gradient(90deg,rgba(43,127,212,0.35),rgba(9,28,50,0.4))] text-jcyan shadow-[inset_0_1px_0_rgba(226,247,255,0.1)]"
                   : "text-jmuted hover:bg-accent/50 hover:text-jtext",
                 collapsed && "justify-center px-0",
               )

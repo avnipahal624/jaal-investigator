@@ -93,8 +93,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background">
+    <div className="metal-page relative min-h-screen overflow-hidden">
       <NetworkBackdrop />
+      <div className="metal-orb pointer-events-none absolute -left-16 top-24 hidden size-36 opacity-50 lg:block" />
+      <div className="metal-halo pointer-events-none absolute -right-20 bottom-10 hidden h-72 w-72 opacity-40 lg:block" />
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-10 px-5 py-10 lg:grid lg:grid-cols-[3fr_2fr] lg:items-center lg:gap-16 lg:px-10">
         {/* Brand side */}
@@ -105,8 +107,8 @@ export default function LoginPage() {
           className="max-w-xl"
         >
           <div className="flex items-center gap-3">
-            <div className="relative flex size-11 items-center justify-center border border-jcyan/60 bg-jcyan/10">
-              <span className="font-mono text-base font-bold text-jcyan">JA</span>
+            <div className="jaal-logo-metal relative flex size-11 items-center justify-center rounded-sm">
+              <span className="font-mono text-base font-bold">JA</span>
               <span className="absolute -right-1 -top-1 size-1.5 bg-jamber jaal-pulse" />
             </div>
             <div>
@@ -118,7 +120,7 @@ export default function LoginPage() {
           <h1 className="mt-8 text-3xl font-bold leading-tight tracking-tight text-jtext sm:text-4xl">
             Every message is a clue.
             <br />
-            <span className="text-jcyan">Turn the scammer into the evidence.</span>
+            <span className="metal-text">Turn the scammer into the evidence.</span>
           </h1>
 
           <p className="mt-4 max-w-md text-sm leading-relaxed text-jmuted">
@@ -136,7 +138,7 @@ export default function LoginPage() {
             ].map((item) => (
               <li
                 key={item}
-                className="flex items-center gap-2 border border-jborder/60 bg-jsurface/70 px-3 py-2 text-[11px] text-jmuted"
+                className="metal-card flex items-center gap-2 rounded-sm px-3 py-2 text-[11px] text-jmuted"
               >
                 <span className="size-1 shrink-0 bg-jcyan" />
                 {item}
@@ -156,7 +158,7 @@ export default function LoginPage() {
           transition={{ duration: 0.5, delay: 0.12 }}
           className="w-full max-w-md justify-self-end"
         >
-          <div className="jaal-panel jaal-hud relative p-6">
+          <div className="metal-surface jaal-hud relative rounded-md p-6">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="jaal-label">Terminal access</p>
@@ -232,7 +234,7 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 disabled={loading !== null}
-                className="w-full cursor-pointer gap-2 bg-jcyan font-semibold text-background hover:bg-jcyan/85"
+                className="metal-button w-full cursor-pointer gap-2 rounded-sm font-semibold"
               >
                 {loading === "login" ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -255,7 +257,7 @@ export default function LoginPage() {
               disabled={loading !== null}
               variant="outline"
               className={cn(
-                "w-full cursor-pointer gap-2 border-jcyan/50 bg-jcyan/10 text-jcyan hover:bg-jcyan/20 hover:text-jcyan",
+                "metal-button-ghost w-full cursor-pointer gap-2 rounded-sm",
               )}
             >
               {loading === "demo" ? (

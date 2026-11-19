@@ -30,7 +30,7 @@ export function AppShell() {
       {/* Desktop sidebar / icon rail */}
       <aside
         className={cn(
-          "jaal-no-print sticky top-0 hidden h-screen shrink-0 border-r border-jborder/70 bg-sidebar transition-[width] duration-200 lg:block",
+          "metal-sidebar jaal-no-print sticky top-0 hidden h-screen shrink-0 border-r transition-[width] duration-200 lg:block",
           collapsed ? "w-16" : "w-[220px]",
         )}
       >

@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const { state } = useJaal();
   const activities = useAllActivities();
   const [query, setQuery] = useState("");
+  const [commandStamp] = useState(() => Date.now());
 
   // Most relevant active case: prefer a live simulation, else newest active.
   const activeCase = useMemo(() => {
@@ -70,19 +71,19 @@ export default function DashboardPage() {
     activeRuntime?.stages.find((s) => s.status === "active") ?? null;
 
   return (
-    <div className="jaal-scanlines mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6">
+    <div className="jaal-scanlines relative mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6">
       {/* Command header */}
       <motion.header
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
+        className="metal-surface jaal-hud relative mb-5 flex flex-col gap-4 overflow-hidden rounded-md p-5 lg:flex-row lg:items-end lg:justify-between"
       >
         <div>
           <p className="jaal-label !text-jcyan">
-            JAAL / COMMAND · {formatDateTime(Date.now())}
+            JAAL / COMMAND · {formatDateTime(commandStamp)}
           </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-jtext sm:text-3xl">
+          <h1 className="metal-text mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
             Investigation launchpad
           </h1>
         </div>
@@ -93,12 +94,12 @@ export default function DashboardPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search investigations…"
-              className="h-8 w-full border border-jborder/70 bg-jsurface pl-8 pr-3 font-mono text-xs text-jtext placeholder:text-jmuted/50 focus-visible:border-jcyan/70 focus-visible:outline-none"
+              className="h-9 w-full rounded-sm border border-white/10 bg-[#04101f]/70 pl-8 pr-3 font-mono text-xs text-jtext shadow-[inset_0_2px_8px_rgba(0,0,0,0.35)] placeholder:text-jmuted/50 focus-visible:border-jcyan/70 focus-visible:outline-none"
             />
           </div>
           <Link
             to="/investigations/new"
-            className="flex h-8 items-center gap-1.5 bg-jcyan px-3 font-mono text-[10px] uppercase tracking-wider text-background transition-colors hover:bg-jcyan/85"
+            className="metal-button flex h-9 items-center gap-1.5 rounded-sm px-4 font-mono text-[10px] uppercase tracking-wider"
           >
             <Plus className="size-3.5" /> Start investigation
           </Link>
@@ -173,7 +174,7 @@ export default function DashboardPage() {
               </div>
               <Link
                 to={`/investigations/${activeCase.id}`}
-                className="group flex items-center gap-2 bg-jcyan px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-background transition-colors hover:bg-jcyan/85"
+                className="metal-button group flex items-center gap-2 rounded-sm px-4 py-2 font-mono text-[11px] uppercase tracking-wider"
               >
                 Resume investigation
                 <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -186,7 +187,7 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="jaal-grid relative mb-4 border border-jborder/70 bg-jsurface/60 px-6 py-14 text-center"
+          className="metal-card jaal-grid relative mb-4 rounded-md px-6 py-14 text-center"
         >
           <div className="pointer-events-none absolute left-3 top-3 h-4 w-4 border-l border-t border-jcyan/50" />
           <div className="pointer-events-none absolute bottom-3 right-3 h-4 w-4 border-b border-r border-jcyan/50" />
@@ -200,7 +201,7 @@ export default function DashboardPage() {
           </p>
           <Link
             to="/investigations/new"
-            className="mt-6 inline-flex items-center gap-2 bg-jcyan px-5 py-2.5 font-mono text-[11px] uppercase tracking-wider text-background transition-colors hover:bg-jcyan/85"
+            className="metal-button mt-6 inline-flex items-center gap-2 rounded-sm px-5 py-2.5 font-mono text-[11px] uppercase tracking-wider"
           >
             <Plus className="size-4" /> Start investigation
           </Link>
