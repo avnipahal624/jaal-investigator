@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Mic,
   Plus,
-  Radar,
   Settings as SettingsIcon,
   ShieldCheck,
 } from "lucide-react";
@@ -19,7 +18,6 @@ const NAV = [
   { to: "/evidence", label: "Evidence Locker", icon: Fingerprint },
   { to: "/voice-intake", label: "Voice Intake", icon: Mic },
   { to: "/reports", label: "Reports", icon: FileText },
-  { to: "/security", label: "Security Ops", icon: Radar },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 

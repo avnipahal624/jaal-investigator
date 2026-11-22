@@ -3,7 +3,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth, RequireConsumer } from "@/components/RequireAuth";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { AppShell } from "@/components/layout/AppShell";
-import { SecurityShell } from "@/components/security/SecurityShell";
 import { JaalProvider } from "@/state/JaalProvider";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
@@ -32,41 +31,6 @@ const EvidencePage = lazy(() => import("./pages/EvidencePage.tsx"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage.tsx"));
 const ReportDetailPage = lazy(() => import("./pages/ReportDetailPage.tsx"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage.tsx"));
-
-// Agentic DAST security console (isolated module, original console untouched).
-const SecurityOverviewPage = lazy(() => import("./pages/security/OverviewPage.tsx"));
-const SecurityInvestigationsPage = lazy(
-  () => import("./pages/security/InvestigationsPage.tsx"),
-);
-const SecurityInvestigationDetailPage = lazy(
-  () => import("./pages/security/InvestigationDetailPage.tsx"),
-);
-const SecurityApiExplorerPage = lazy(
-  () => import("./pages/security/ApiExplorerPage.tsx"),
-);
-const SecurityKnowledgeGraphPage = lazy(
-  () => import("./pages/security/KnowledgeGraphPage.tsx"),
-);
-const SecurityAgentsPage = lazy(() => import("./pages/security/AgentsPage.tsx"));
-const SecurityVulnerabilitiesPage = lazy(
-  () => import("./pages/security/VulnerabilitiesPage.tsx"),
-);
-const SecurityFindingDetailPage = lazy(
-  () => import("./pages/security/FindingDetailPage.tsx"),
-);
-const SecurityDeploymentsPage = lazy(
-  () => import("./pages/security/DeploymentsPage.tsx"),
-);
-const SecurityEvidencePage = lazy(
-  () => import("./pages/security/EvidenceVaultPage.tsx"),
-);
-const SecurityReportsPage = lazy(() => import("./pages/security/ReportsPage.tsx"));
-const SecurityReportDetailPage = lazy(
-  () => import("./pages/security/ReportDetailPage.tsx"),
-);
-const SecuritySettingsPage = lazy(
-  () => import("./pages/security/SafetySettingsPage.tsx"),
-);
 
 // Consumer routes (blue glassmorphism, Normal People experience).
 const ConsumerLayout = lazy(
@@ -242,41 +206,6 @@ createRoot(document.getElementById("root")!).render(
                     <Route path="/reports" element={<ReportsPage />} />
                     <Route path="/reports/:id" element={<ReportDetailPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
-                  </Route>
-
-                  {/* Agentic DAST security console — isolated tables and routes. */}
-                  <Route
-                    element={
-                      <RequireAuth>
-                        <SecurityShell />
-                      </RequireAuth>
-                    }
-                  >
-                    <Route path="/security" element={<SecurityOverviewPage />} />
-                    <Route
-                      path="/security/investigations"
-                      element={<SecurityInvestigationsPage />}
-                    />
-                    <Route
-                      path="/security/investigations/:id"
-                      element={<SecurityInvestigationDetailPage />}
-                    />
-                    <Route path="/security/apis" element={<SecurityApiExplorerPage />} />
-                    <Route path="/security/graph" element={<SecurityKnowledgeGraphPage />} />
-                    <Route path="/security/agents" element={<SecurityAgentsPage />} />
-                    <Route
-                      path="/security/vulnerabilities"
-                      element={<SecurityVulnerabilitiesPage />}
-                    />
-                    <Route
-                      path="/security/vulnerabilities/:id"
-                      element={<SecurityFindingDetailPage />}
-                    />
-                    <Route path="/security/deployments" element={<SecurityDeploymentsPage />} />
-                    <Route path="/security/evidence" element={<SecurityEvidencePage />} />
-                    <Route path="/security/reports" element={<SecurityReportsPage />} />
-                    <Route path="/security/reports/:id" element={<SecurityReportDetailPage />} />
-                    <Route path="/security/settings" element={<SecuritySettingsPage />} />
                   </Route>
 
                   {/* Consumer routes — blue glassmorphism, Normal People experience. */}
