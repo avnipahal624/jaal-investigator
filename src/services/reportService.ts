@@ -90,7 +90,7 @@ export function buildReport(
     category: investigation.category,
     generatedAt: now,
     generatedBy,
-    simulated: true,
+    simulated: investigation.source === "simulation",
     hashAlgorithm: "SHA-256",
     provenance,
     status: investigation.status,
@@ -169,7 +169,52 @@ export function buildReport(
     })),
     analystNotes:
       investigation.notes ||
-      "No analyst notes recorded. All identifiers in this report are synthetic demo values extracted from a controlled simulation.",
+      (investigation.source === "simulation"
+        ? "No analyst notes recorded. All identifiers in this report are synthetic demo values extracted from a controlled simulation."
+        : "No analyst notes recorded. This report contains user-supplied evidence; hashes verify content integrity only."),
+  };
+}
+
+const SENSITIVE_EXPORT_PATTERN = /intimate|nude|naked|sexual|photo|video|blackmail|extort/i;
+
+/**
+ * Build the report that will actually leave JAAL. Excluded findings are
+ * removed, sensitive-looking rows are removed by default, and only the
+ * editable narrative is replaced — source messages are never rewritten.
+ */
+export function filterReportForExport(
+  report: EvidenceReport,
+  options: {
+    narrative?: string;
+    excludedEvidenceIds?: string[];
+    excludedTacticKeys?: string[];
+    redactSensitive?: boolean;
+  } = {},
+): EvidenceReport {
+  const excluded = new Set(options.excludedEvidenceIds ?? []);
+  const excludedTactics = new Set(options.excludedTacticKeys ?? []);
+  const redactSensitive = options.redactSensitive ?? true;
+  const narrative = options.narrative ?? report.summary.scenario;
+  return {
+    ...report,
+    description: narrative,
+    summary: {
+      ...report.summary,
+      scenario: narrative,
+      moments: report.summary.moments.filter(
+        (moment) =>
+          !redactSensitive ||
+          !SENSITIVE_EXPORT_PATTERN.test(`${moment.label} ${moment.text}`),
+      ),
+    },
+    evidence: report.evidence.filter((row) => {
+      if (excluded.has(row.id)) return false;
+      if (redactSensitive && SENSITIVE_EXPORT_PATTERN.test(`${row.label} ${row.value}`)) return false;
+      return true;
+    }),
+    tactics: report.tactics.filter(
+      (row) => !excludedTactics.has(`${row.tactic}:${row.timestamp}`),
+    ),
   };
 }
 
@@ -178,8 +223,9 @@ export function exportReportJson(report: EvidenceReport): void {
     `${report.id}_${report.caseId}.json`.toLowerCase(),
     {
       ...report,
-      disclaimer:
-        "SIMULATED REPORT — generated from a controlled JAAL demo conversation. Hashes verify content integrity only; they do not establish authenticity, guilt or legal admissibility.",
+      disclaimer: report.simulated
+        ? "SIMULATED REPORT — generated from a controlled JAAL demo conversation. Hashes verify content integrity only; they do not establish authenticity, guilt or legal admissibility."
+        : "REPORT — contains user-supplied evidence. Hashes verify that content is unchanged since collection; they do not establish authorship, guilt or legal admissibility.",
     },
   );
 }

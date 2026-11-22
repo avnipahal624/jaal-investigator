@@ -17,6 +17,7 @@ import {
   SCAM_CATEGORIES,
   type ScamCategory,
 } from "@/types/investigation";
+import { SCENARIOS, scenarioKeyForCategory } from "@/data/scenarios";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -62,6 +63,9 @@ export function NewInvestigationWizard() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<ScamCategory>(
     state.settings.investigation.defaultCategory,
+  );
+  const [scenarioKey, setScenarioKey] = useState<string>(() =>
+    scenarioKeyForCategory(state.settings.investigation.defaultCategory),
   );
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
@@ -123,6 +127,10 @@ export function NewInvestigationWizard() {
       description: description.trim(),
       notes: notes.trim(),
       source: source === "simulation" ? "simulation" : "import",
+      scenarioKey:
+        source === "simulation"
+          ? scenarioKey || scenarioKeyForCategory(category)
+          : undefined,
       detectionMode: state.settings.investigation.defaultDetectionMode,
       flags: { tacticDetection, identifierExtraction, integrityHashing, aiSuggestions },
       transcript: source === "simulation" ? undefined : transcript,
@@ -214,10 +222,44 @@ export function NewInvestigationWizard() {
                       />
                     </div>
                     <div className="space-y-1.5">
+                      <Label className="jaal-label">Synthetic scenario</Label>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {SCENARIOS.map((scenario) => (
+                          <button
+                            key={scenario.key}
+                            type="button"
+                            onClick={() => {
+                              setScenarioKey(scenario.key);
+                              setCategory(scenario.category as ScamCategory);
+                              if (!title.trim()) setTitle(scenario.title);
+                              if (!description.trim()) setDescription(scenario.description);
+                            }}
+                            className={cn(
+                              "border px-3 py-2.5 text-left transition-colors",
+                              scenarioKey === scenario.key
+                                ? "border-jcyan/60 bg-jcyan/10"
+                                : "border-jborder/70 bg-jsurface hover:border-jcyan/40",
+                            )}
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-medium text-jtext">{scenario.title}</span>
+                              <span className="font-mono text-[8px] uppercase tracking-wider text-jamber">SIM</span>
+                            </span>
+                            <span className="mt-1 block text-[10px] leading-relaxed text-jmuted">
+                              {scenario.badge} · {scenario.turns.length} scripted turns
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
                       <Label className="jaal-label">Scam category</Label>
                       <Select
                         value={category}
-                        onValueChange={(v) => setCategory(v as ScamCategory)}
+                        onValueChange={(v) => {
+                          setCategory(v as ScamCategory);
+                          setScenarioKey(scenarioKeyForCategory(v));
+                        }}
                       >
                         <SelectTrigger className="border-jborder/70 bg-jsurface text-jtext focus:ring-jcyan/40">
                           <SelectValue />

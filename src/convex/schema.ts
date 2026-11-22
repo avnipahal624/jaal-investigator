@@ -80,6 +80,8 @@ const schema = defineSchema(
       owner: v.string(),
       title: v.string(),
       category: v.string(),
+      /** Synthetic scenario preset used for demo-style cases. */
+      scenarioKey: v.optional(v.string()),
       description: v.string(),
       notes: v.string(),
       status: v.union(
@@ -257,6 +259,13 @@ const schema = defineSchema(
       generatedAt: v.number(),
       reportStatus: v.string(),
       simulated: v.boolean(),
+      /** Human-reviewed report draft; source evidence is never mutated. */
+      draftNarrative: v.optional(v.string()),
+      excludedEvidenceIds: v.optional(v.array(v.string())),
+      excludedTacticKeys: v.optional(v.array(v.string())),
+      redactSensitive: v.optional(v.boolean()),
+      reviewedAt: v.optional(v.number()),
+      reviewedBy: v.optional(v.string()),
     })
       .index("by_owner", ["owner"])
       .index("by_investigation", ["investigationId"]),
@@ -453,6 +462,12 @@ const schema = defineSchema(
       transcriptSource: v.optional(
         v.union(v.literal("SPEECH_PROVIDER"), v.literal("CONSUMER_PROVIDED")),
       ),
+      /** Additive human corrections. The machine transcript is never overwritten. */
+      transcriptCorrections: v.optional(v.any()),
+      /** Case-level provenance; user-supplied audio is never labelled synthetic. */
+      provenance: v.optional(
+        v.union(v.literal("USER_PROVIDED"), v.literal("SIMULATION")),
+      ),
 
       // AI voice-scam analysis — separate from transcription.
       analysis: v.object({
@@ -527,6 +542,58 @@ const schema = defineSchema(
       .index("by_investigation", ["investigationId"])
       .index("by_storage", ["storageId"])
       .index("by_owner_idempotency", ["owner", "idempotencyKey"]),
+
+    /** Case action state — generated suggestions are deterministic, decisions persist. */
+    case_action_states: defineTable({
+      investigationId: v.id("investigations"),
+      owner: v.string(),
+      caseId: v.string(),
+      actionKey: v.string(),
+      status: v.union(
+        v.literal("not_started"),
+        v.literal("done"),
+        v.literal("not_applicable"),
+      ),
+      updatedAt: v.number(),
+    })
+      .index("by_investigation", ["investigationId"])
+      .index("by_investigation_action", ["investigationId", "actionKey"]),
+
+    /** Direct answers that change suggested next actions (never inferred). */
+    case_answers: defineTable({
+      investigationId: v.id("investigations"),
+      owner: v.string(),
+      caseId: v.string(),
+      codeShared: v.boolean(),
+      moneySent: v.boolean(),
+      linkOpened: v.boolean(),
+      authorityClaimed: v.boolean(),
+      updatedAt: v.number(),
+    }).index("by_investigation", ["investigationId"]),
+
+    /** Call Companion capture and synthetic decoy-call sessions. */
+    call_sessions: defineTable({
+      investigationId: v.id("investigations"),
+      owner: v.string(),
+      caseId: v.string(),
+      mode: v.union(v.literal("companion"), v.literal("decoy")),
+      scenarioKey: v.optional(v.string()),
+      status: v.union(
+        v.literal("running"),
+        v.literal("paused"),
+        v.literal("ended"),
+      ),
+      engine: v.string(),
+      maxTurns: v.number(),
+      currentTurn: v.number(),
+      turns: v.any(),
+      syncedAt: v.optional(v.number()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+      endedAt: v.optional(v.number()),
+    })
+      .index("by_investigation", ["investigationId"])
+      .index("by_investigation_mode", ["investigationId", "mode"]),
 
     /** Per-user settings (appearance / investigation / simulation). */
     settings: defineTable({

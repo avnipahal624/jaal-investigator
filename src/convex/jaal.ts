@@ -50,16 +50,23 @@ import {
 import {
   arcExhausted,
   nextScammerTurn,
+  type NextTurn,
 } from "@/services/simulationService";
 import { createStages } from "@/services/investigationService";
 import { buildReport } from "@/services/reportService";
 import { buildSeedCases } from "@/data/demoInvestigations";
-import { OPENING_TURN } from "@/data/demoConversation";
+import { OPENING_TURN, type ScriptTurn } from "@/data/demoConversation";
+import {
+  getScenario,
+  isScenarioExhausted,
+  scenarioKeyForCategory,
+  scenarioTurn,
+} from "@/data/scenarios";
 import { sha256Hex } from "@/utils/hash";
 import { parseTranscript, summarizeImport } from "@/services/transcriptParser";
 import type { CaseRuntime, Investigation, KillChainStage } from "@/types/investigation";
+import type { EvidenceReport, ReportEvidenceRow } from "@/types/report";
 import type { Settings } from "@/types/settings";
-import type { EvidenceReport } from "@/types/report";
 
 /** Wire shape of the `state` subscription (null when signed out). */
 type RemoteState = {
@@ -394,13 +401,15 @@ async function seedOpening(
 ): Promise<void> {
   if (inv.source !== "simulation") return;
   const now = Date.now();
+  const scenario = getScenario(inv.scenarioKey);
+  const openingText = scenario?.turns[0]?.text ?? OPENING_TURN.text;
   const msgId = await db.insert("messages", {
     investigationId: inv._id,
     owner: inv.owner,
     caseId: inv.caseId,
     messageNumber: 1,
     sender: "scammer",
-    content: OPENING_TURN.text,
+    content: openingText,
     source: "SIM-ENGINE",
     timestamp: now,
   });
@@ -418,6 +427,7 @@ export const createInvestigation = mutation({
     caseId: v.optional(v.string()),
     title: v.string(),
     category: v.string(),
+    scenarioKey: v.optional(v.string()),
     description: v.string(),
     notes: v.optional(v.string()),
     source: v.union(
@@ -460,11 +470,17 @@ export const createInvestigation = mutation({
     }
 
     const now = Date.now();
+    const scenarioKey =
+      args.scenarioKey ??
+      (args.source === "simulation"
+        ? scenarioKeyForCategory(args.category)
+        : undefined);
     const invId = await ctx.db.insert("investigations", {
       caseId,
       owner,
       title: args.title,
       category: args.category,
+      scenarioKey,
       description: args.description,
       notes: args.notes ?? "",
       status: "active",
@@ -630,6 +646,19 @@ async function completeInvestigationDoc(
   }
 }
 
+type FindingLike = {
+  id: string;
+  tactic: string;
+  excerpt?: string;
+  explanation?: string;
+  timestampMs?: number;
+};
+
+function formatMs(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 async function generateReportDoc(
   db: MutationCtx["db"],
   inv: Doc<"investigations">,
@@ -645,10 +674,65 @@ async function generateReportDoc(
     .collect();
   const version = existing.length + 1;
   const built = buildReport(investigation, runtime, generatedBy, now);
+
+  // Voice findings enter the report only after a human accepts them. The
+  // machine transcript and the original recording are never rewritten.
+  const voiceRows = await db
+    .query("voice_recordings")
+    .withIndex("by_investigation", (q) => q.eq("investigationId", inv._id))
+    .collect();
+  const voiceEvidence: ReportEvidenceRow[] = [];
+  const voiceMoments = [...built.summary.moments];
+  const voiceTimeline = [...built.timeline];
+  for (const rec of voiceRows.filter((row) => row.owner === inv.owner)) {
+    const reviews = (rec.findingReviews as Record<string, { verdict?: string }> | null) ?? {};
+    const findings = ((rec.analysis.findings as FindingLike[] | null) ?? []).filter(
+      (finding) => reviews[finding.id]?.verdict === "accepted",
+    );
+    for (const finding of findings) {
+      const at = finding.timestampMs;
+      const where = typeof at === "number" ? ` @ ${formatMs(at)}` : "";
+      voiceMoments.push({
+        timestamp: rec.approximateCallAt ?? rec.createdAt,
+        label: `${rec.fileName}${where}`,
+        text: finding.excerpt || finding.explanation || finding.tactic,
+      });
+      voiceEvidence.push({
+        id: `voice:${rec._id}:${finding.id}`,
+        type: "voice_finding",
+        label: finding.tactic,
+        value: `${finding.excerpt || finding.explanation} (${rec.fileName}${where})`,
+        extractedAt: rec.updatedAt,
+        hash: rec.fileHash,
+        hashStatus: "HASHED",
+        hashAlgorithm: rec.hashAlgorithm,
+        review: {
+          status: "accepted",
+          note: "Reviewed by the investigator.",
+          reviewedAt: reviews[finding.id] ? rec.updatedAt : null,
+        },
+        sourceMessageId: null,
+        sourceMessageNumber: null,
+        confidence: null,
+        detectionMethod: "VOICE_FINDING_REVIEW",
+      });
+    }
+    voiceTimeline.push({
+      timestamp: rec.approximateCallAt ?? rec.createdAt,
+      kind: "audio",
+      title: rec.fileName,
+      detail: `Recording added to JAAL; original call time ${rec.approximateCallAt ? "recorded" : "unknown"}.`,
+    });
+  }
+
   const report: EvidenceReport = {
     ...built,
     id: opts.reportId ?? built.id,
     reportVersion: version,
+    summary: { ...built.summary, moments: voiceMoments },
+    evidence: [...built.evidence, ...voiceEvidence],
+    evidenceCount: built.evidenceCount + voiceEvidence.length,
+    timeline: voiceTimeline.sort((a, b) => a.timestamp - b.timestamp),
   };
 
   await db.insert("reports", {
@@ -661,7 +745,7 @@ async function generateReportDoc(
     reportData: report,
     generatedAt: report.generatedAt,
     reportStatus: "GENERATED",
-    simulated: true,
+    simulated: report.simulated,
   });
   await pushLog(
     db,
@@ -765,6 +849,33 @@ async function ingestMessageDoc(
   return doc;
 }
 
+function nextCaseTurn(
+  inv: Doc<"investigations">,
+  operatorText: string,
+): NextTurn {
+  if (inv.scenarioKey && inv.scenarioKey !== "digital-arrest") {
+    const turn = scenarioTurn(inv.scenarioKey, inv.cursor);
+    if (!turn) {
+      return { text: "", arc: null, branch: null, exhausted: true };
+    }
+    const arc: ScriptTurn = {
+      text: turn.text,
+      stage: turn.stage,
+      tactics: [],
+      identifiers: [],
+    };
+    return { text: turn.text, arc, branch: null, exhausted: false };
+  }
+  return nextScammerTurn(operatorText, inv.cursor, inv.turnCount);
+}
+
+function caseExhausted(inv: Doc<"investigations">, cursor: number): boolean {
+  if (inv.scenarioKey && inv.scenarioKey !== "digital-arrest") {
+    return isScenarioExhausted(inv.scenarioKey, cursor);
+  }
+  return arcExhausted(cursor);
+}
+
 /**
  * Send an operator (decoy) message, run the pipeline, then produce the
  * scripted scammer reply (contextual branch or next arc line). Mirrors the
@@ -800,7 +911,7 @@ async function sendDecoyAndReply(
   );
 
   const fresh = (await ctx.db.get(inv._id))!;
-  const turn = nextScammerTurn(text, fresh.cursor, fresh.turnCount);
+  const turn = nextCaseTurn(fresh, text);
 
   if (turn.exhausted) {
     await ingestMessageDoc(ctx, fresh, {
@@ -832,7 +943,7 @@ async function sendDecoyAndReply(
   // may supersede this with an LLM-generated strategy when configured.
   await refreshStrategy(ctx.db, (await ctx.db.get(fresh._id))!);
 
-  if (arcExhausted(nextCursor) && !turn.branch) {
+  if (caseExhausted(fresh, nextCursor) && !turn.branch) {
     const identity = await ctx.auth.getUserIdentity();
     await completeInvestigationDoc(
       ctx.db,
@@ -937,7 +1048,7 @@ export const simulationNext = mutation({
     }
     await enforceMessageRateLimit(ctx.db, inv);
     const fresh = (await ctx.db.get(inv._id))!;
-    if (arcExhausted(fresh.cursor)) {
+    if (caseExhausted(fresh, fresh.cursor)) {
       await ingestMessageDoc(ctx, fresh, {
         sender: "system",
         content: "Script exhausted — no further synthetic lines available.",
@@ -952,7 +1063,7 @@ export const simulationNext = mutation({
       return { reply: null, completed: true, exhausted: true };
     }
 
-    const turn = nextScammerTurn("", fresh.cursor, fresh.turnCount);
+    const turn = nextCaseTurn(fresh, "");
     if (turn.exhausted) {
       const identity = await ctx.auth.getUserIdentity();
       await completeInvestigationDoc(
@@ -974,7 +1085,7 @@ export const simulationNext = mutation({
     });
     await refreshStrategy(ctx.db, (await ctx.db.get(fresh._id))!);
 
-    if (arcExhausted(nextCursor) && !turn.branch) {
+    if (caseExhausted(fresh, nextCursor) && !turn.branch) {
       const identity = await ctx.auth.getUserIdentity();
       await completeInvestigationDoc(
         ctx.db,
@@ -984,6 +1095,44 @@ export const simulationNext = mutation({
       return { reply: replyDoc.content, completed: true, exhausted: false };
     }
     return { reply: replyDoc.content, completed: false, exhausted: false };
+  },
+});
+
+export const syncDecoyCallToCase = mutation({
+  args: { caseId: v.string(), sessionId: v.id("call_sessions") },
+  handler: async (ctx, args) => {
+    const inv = await requireInvestigation(ctx, args.caseId);
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.owner !== inv.owner || session.investigationId !== inv._id) {
+      throw new Error("Call session not found for this case.");
+    }
+    if (session.syncedAt) return { synced: 0, alreadySynced: true };
+    const turns = (session.turns as
+      | { speaker?: "jaal" | "scammer"; text?: string; at?: number }[]
+      | null) ?? [];
+    let synced = 0;
+    for (const turn of turns) {
+      if (!turn.text?.trim()) continue;
+      await ingestMessageDoc(ctx, inv, {
+        sender: turn.speaker === "scammer" ? "scammer" : "decoy",
+        content: turn.text,
+        source: "DECOY-SIM",
+        status: "SIMULATION",
+        timestamp: turn.at,
+      });
+      synced += 1;
+    }
+    const now = Date.now();
+    await ctx.db.patch(session._id, { syncedAt: now, updatedAt: now });
+    await pushEvent(
+      ctx.db,
+      inv,
+      "correlation",
+      "Decoy call added to case",
+      `${synced} simulated call turn(s) added with SIMULATION provenance.`,
+      now,
+    );
+    return { synced, alreadySynced: false };
   },
 });
 

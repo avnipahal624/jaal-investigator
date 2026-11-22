@@ -5,6 +5,7 @@ import {
   type BranchReply,
   type ScriptTurn,
 } from "@/data/demoConversation";
+import { getScenario, isScenarioExhausted, scenarioTurn } from "@/data/scenarios";
 
 /**
  * Local scripted conversation engine.
@@ -47,7 +48,14 @@ export function nextScammerTurn(
   userText: string,
   cursor: number,
   turnCount: number,
+  scenarioKey?: string,
 ): NextTurn {
+  if (scenarioKey && getScenario(scenarioKey) && scenarioKey !== "digital-arrest") {
+    const turn = scenarioTurn(scenarioKey, cursor);
+    if (!turn) return { text: "", arc: null, branch: null, exhausted: true };
+    const arc: ScriptTurn = { text: turn.text, stage: turn.stage, tactics: [], identifiers: [] };
+    return { text: turn.text, arc, branch: null, exhausted: false };
+  }
   const branch = matchBranch(userText);
   if (branch) {
     const reply = branch.replies[turnCount % branch.replies.length]!;
@@ -71,6 +79,14 @@ export function nextScammerTurn(
 /** True when the scripted arc is fully consumed. */
 export function arcExhausted(cursor: number): boolean {
   return cursor >= SCAMMER_ARC.length;
+}
+
+/** Scenario-aware exhaustion check for locally-created synthetic cases. */
+export function caseExhausted(scenarioKey: string | undefined, cursor: number): boolean {
+  if (scenarioKey && scenarioKey !== "digital-arrest" && getScenario(scenarioKey)) {
+    return isScenarioExhausted(scenarioKey, cursor);
+  }
+  return arcExhausted(cursor);
 }
 
 /** What's left in the arc — used for the completion state. */

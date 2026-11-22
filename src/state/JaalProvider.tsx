@@ -22,7 +22,7 @@ import {
 } from "@/services/evidenceService";
 import { buildReport } from "@/services/reportService";
 import { parseTranscript } from "@/services/transcriptParser";
-import { arcExhausted, nextScammerTurn } from "@/services/simulationService";
+import { caseExhausted, nextScammerTurn } from "@/services/simulationService";
 import type { Investigation, ScamCategory, DetectionMode } from "@/types/investigation";
 import type { ConversationMessage } from "@/types/message";
 import type { EvidenceReport } from "@/types/report";
@@ -41,6 +41,7 @@ import {
 export interface CreateCaseInput {
   title: string;
   category: ScamCategory;
+  scenarioKey?: string;
   description: string;
   notes: string;
   source: Investigation["source"];
@@ -358,6 +359,7 @@ export function JaalProvider({ children }: { children: ReactNode }) {
         id: caseId,
         title: input.title,
         category: input.category,
+        scenarioKey: input.scenarioKey,
         description: input.description,
         notes: input.notes,
         status: "active",
@@ -404,6 +406,7 @@ export function JaalProvider({ children }: { children: ReactNode }) {
           caseId,
           title: input.title,
           category: input.category,
+          scenarioKey: input.scenarioKey,
           description: input.description,
           notes: input.notes,
           source: input.source,
@@ -530,7 +533,8 @@ export function JaalProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const turn = nextScammerTurn(trimmed, current.cursor, current.turnCount);
+      const scenarioKey = stateRef.current.investigations.find((i) => i.id === caseId)?.scenarioKey;
+      const turn = nextScammerTurn(trimmed, current.cursor, current.turnCount, scenarioKey);
       if (turn.exhausted) {
         dispatch({ type: "TYPING", caseId, typing: false });
         dispatch({
@@ -558,7 +562,7 @@ export function JaalProvider({ children }: { children: ReactNode }) {
       };
       const nextCursor = turn.arc ? current.cursor + 1 : current.cursor;
       const nextTurnCount = current.turnCount + 1;
-      if (arcExhausted(nextCursor) && !turn.branch) {
+      if (caseExhausted(scenarioKey, nextCursor) && !turn.branch) {
         dispatch({
           type: "INGEST_MESSAGE",
           message: reply,
@@ -601,7 +605,8 @@ export function JaalProvider({ children }: { children: ReactNode }) {
       const current = stateRef.current.sessions[caseId];
       if (!current || current.status !== "running") return;
 
-      if (arcExhausted(current.cursor)) {
+      const scenarioKey = stateRef.current.investigations.find((i) => i.id === caseId)?.scenarioKey;
+      if (caseExhausted(scenarioKey, current.cursor)) {
         dispatch({
           type: "INGEST_MESSAGE",
           message: {
@@ -623,7 +628,7 @@ export function JaalProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "TYPING", caseId, typing: false });
         return;
       }
-      const turn = nextScammerTurn("", rt.cursor, rt.turnCount);
+      const turn = nextScammerTurn("", rt.cursor, rt.turnCount, scenarioKey);
       if (turn.exhausted) {
         dispatch({ type: "TYPING", caseId, typing: false });
         dispatch({ type: "SET_CASE_STATUS", caseId, status: "completed" });
@@ -643,7 +648,7 @@ export function JaalProvider({ children }: { children: ReactNode }) {
         cursor: nextCursor,
         turnCount: rt.turnCount + 1,
       });
-      if (arcExhausted(nextCursor) && !turn.branch) {
+      if (caseExhausted(scenarioKey, nextCursor) && !turn.branch) {
         dispatch({ type: "SET_CASE_STATUS", caseId, status: "completed" });
       }
     },

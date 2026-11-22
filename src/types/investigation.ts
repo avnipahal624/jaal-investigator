@@ -3,10 +3,13 @@ import type { EvidenceItem } from "./evidence";
 
 export const SCAM_CATEGORIES = [
   "Digital arrest scam",
+  "Job scam",
+  "Fake parcel/delivery scam",
+  "Account takeover/OTP scam",
+  "Sextortion/blackmail",
   "UPI/payment scam",
   "Phishing",
   "Impersonation",
-  "Job scam",
   "Investment scam",
   "Other",
 ] as const;
@@ -103,6 +106,8 @@ export interface Investigation {
   id: string;
   title: string;
   category: ScamCategory;
+  /** Synthetic scenario preset; absent on imported/user-provided cases. */
+  scenarioKey?: string;
   description: string;
   notes: string;
   status: InvestigationStatus;

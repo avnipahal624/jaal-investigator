@@ -7,6 +7,7 @@ import type { CaseRuntime, Investigation } from "@/types/investigation";
 import { cn } from "@/lib/utils";
 import {
   ArrowDown,
+  Eye,
   FastForward,
   FileStack,
   Pause,
@@ -45,8 +46,10 @@ export function ConversationConsole({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
   const [freshId, setFreshId] = useState<string | null>(null);
+  const [revealedSensitive, setRevealedSensitive] = useState<Set<string>>(new Set());
 
   const messages = runtime.messages;
+  const sensitiveCase = /blackmail|sextortion/i.test(investigation.category);
   const lastId = messages[messages.length - 1]?.id ?? null;
 
   useEffect(() => {
@@ -177,14 +180,45 @@ export function ConversationConsole({
               </p>
             </div>
           )}
-          {messages.map((m, i) => (
-            <MessageRow
-              key={m.id}
-              message={m}
-              number={i + 1}
-              highlight={highlightId === m.id || freshId === m.id}
-            />
-          ))}
+          {messages.map((m, i) => {
+            const sensitive =
+              sensitiveCase &&
+              m.author === "scammer" &&
+              /private (photos|images|material)|intimate|nude|naked|sexual/i.test(m.text);
+            if (sensitive && !revealedSensitive.has(m.id)) {
+              return (
+                <div
+                  key={m.id}
+                  id={`msg-${m.id}`}
+                  className="border border-jamber/30 bg-jamber/5 px-3 py-2.5"
+                >
+                  <p className="font-mono text-[8px] uppercase tracking-wider text-jamber">
+                    Sensitive blackmail excerpt · hidden by default
+                  </p>
+                  <p className="mt-1 text-[11px] text-jmuted">
+                    This message refers to private material. JAAL does not display it unless you choose to.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRevealedSensitive((current) => new Set(current).add(m.id))
+                    }
+                    className="mt-2 inline-flex items-center gap-1.5 border border-jamber/40 px-2 py-1 font-mono text-[8px] uppercase tracking-wider text-jamber"
+                  >
+                    <Eye className="size-3" /> Show this excerpt
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <MessageRow
+                key={m.id}
+                message={m}
+                number={i + 1}
+                highlight={highlightId === m.id || freshId === m.id}
+              />
+            );
+          })}
           {isTyping && <TypingIndicator />}
         </div>
 

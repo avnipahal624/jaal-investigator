@@ -1,4 +1,5 @@
 import { OPENING_TURN } from "@/data/demoConversation";
+import { getScenario } from "@/data/scenarios";
 import { buildSeedCases, type SeedCase } from "@/data/demoInvestigations";
 import { getDemoSession, type DemoSession } from "@/lib/demoSession";
 import {
@@ -386,7 +387,9 @@ export function reducer(state: JaalState, action: Action): JaalState {
           id: uid("msg"),
           caseId: investigation.id,
           author: "scammer",
-          text: OPENING_TURN.text,
+          text:
+            getScenario(investigation.scenarioKey)?.turns[0]?.text ??
+            OPENING_TURN.text,
           timestamp: Date.now(),
           source: "SIM-ENGINE",
         };
@@ -630,7 +633,7 @@ export function reducer(state: JaalState, action: Action): JaalState {
           id: uid("msg"),
           caseId: inv.id,
           author: "scammer",
-          text: OPENING_TURN.text,
+          text: getScenario(inv.scenarioKey)?.turns[0]?.text ?? OPENING_TURN.text,
           timestamp: now,
           source: "SIM-ENGINE",
         };

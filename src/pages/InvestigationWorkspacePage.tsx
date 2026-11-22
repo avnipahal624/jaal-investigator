@@ -11,6 +11,11 @@ import { AiStrategyPanel } from "@/components/analysis/AiStrategyPanel";
 import { DetectedTactics } from "@/components/analysis/DetectedTactics";
 import { CaseRail } from "@/components/investigation/CaseRail";
 import { WorkspaceHeader } from "@/components/investigation/WorkspaceHeader";
+import { CaseVoicePanel } from "@/components/case/CaseVoicePanel";
+import { CaseTimelinePanel } from "@/components/case/CaseTimelinePanel";
+import { CaseActionsPanel } from "@/components/case/CaseActionsPanel";
+import { CaseReportPanel } from "@/components/case/CaseReportPanel";
+import { CaseVoiceSources } from "@/components/case/CaseVoiceSources";
 import { Panel } from "@/components/ui/panel";
 import { api } from "@/convex/_generated/api";
 import { useJaal } from "@/state/JaalProvider";
@@ -22,9 +27,30 @@ import type {
   Investigation,
 } from "@/types/investigation";
 import type { GraphTacticData } from "@/types/evidenceGraph";
-import { Brain, Fingerprint, MessagesSquare, ScrollText, Waypoints } from "lucide-react";
+import {
+  Brain,
+  ClipboardList,
+  Clock3,
+  FileText,
+  Fingerprint,
+  LayoutDashboard,
+  MessagesSquare,
+  ScrollText,
+  Waypoints,
+  AudioLines,
+} from "lucide-react";
 
 type MobileTab = "chat" | "board" | "evidence" | "logs";
+type CaseTab = "overview" | "voice" | "board" | "timeline" | "actions" | "report";
+
+const CASE_TABS: { id: CaseTab; label: string; Icon: typeof Brain }[] = [
+  { id: "overview", label: "Overview", Icon: LayoutDashboard },
+  { id: "voice", label: "Voice & Calls", Icon: AudioLines },
+  { id: "board", label: "Evidence Board", Icon: Waypoints },
+  { id: "timeline", label: "Timeline", Icon: Clock3 },
+  { id: "actions", label: "Actions", Icon: ClipboardList },
+  { id: "report", label: "Report", Icon: FileText },
+];
 
 const MOBILE_TABS: { id: MobileTab; label: string; Icon: typeof Brain }[] = [
   { id: "chat", label: "Chat", Icon: MessagesSquare },
@@ -56,6 +82,8 @@ export default function InvestigationWorkspacePage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
+  const [caseTab, setCaseTab] = useState<CaseTab>("overview");
+  const [voiceFocus, setVoiceFocus] = useState<{ recordingId: string; atMs?: number } | null>(null);
   const [evidenceDrawerId, setEvidenceDrawerId] = useState<string | null>(null);
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
   const [boardSelection, setBoardSelection] = useState<BoardSelection>(null);
@@ -99,6 +127,7 @@ export default function InvestigationWorkspacePage() {
 
   /** Source navigation: jump the conversation to the linked message. */
   const openSourceMessage = (messageId: string) => {
+    setCaseTab("overview");
     setMobileTab("chat");
     setHighlightMsgId(null);
     // Re-trigger highlight even if the same id is clicked twice.
@@ -159,6 +188,14 @@ export default function InvestigationWorkspacePage() {
         />
       </div>
 
+      <CaseTabBar
+        value={caseTab}
+        onChange={(tab) => {
+          setVoiceFocus(null);
+          setCaseTab(tab);
+        }}
+      />
+
       {/* Mobile header + tab navigation */}
       <div className="lg:hidden">
         <MobileCaseBar investigation={investigation} runtime={runtime} />
@@ -188,6 +225,8 @@ export default function InvestigationWorkspacePage() {
         </nav>
       </div>
 
+      {caseTab === "overview" && (
+        <>
       {/* Desktop workspace — left rail · center board+chat · right rail */}
       <div className="hidden min-h-0 flex-1 grid-cols-1 lg:grid lg:grid-cols-[minmax(0,1fr)_330px] xl:grid-cols-[278px_minmax(0,1fr)_352px]">
         {/* Left rail — case briefing, stages, clues, activity (xl+) */}
@@ -316,6 +355,35 @@ export default function InvestigationWorkspacePage() {
           </div>
         )}
       </div>
+        </>
+      )}
+
+      {caseTab !== "overview" && (
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 lg:p-4">
+          {caseTab === "voice" && <CaseVoicePanel caseId={investigation.id} focus={voiceFocus} />}
+          {caseTab === "board" && (
+            <div className="jaal-panel grid h-[72vh] min-h-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="min-h-0">{board()}</div>
+              <CaseVoiceSources
+                caseId={investigation.id}
+                onOpenFinding={(recordingId, atMs) => {
+                  setVoiceFocus({ recordingId, atMs });
+                  setCaseTab("voice");
+                }}
+              />
+            </div>
+          )}
+          {caseTab === "timeline" && (
+            <CaseTimelinePanel
+              caseId={investigation.id}
+              onOpenMessage={openSourceMessage}
+              onOpenView={(view) => setCaseTab(view === "voice" ? "voice" : view)}
+            />
+          )}
+          {caseTab === "actions" && <CaseActionsPanel caseId={investigation.id} />}
+          {caseTab === "report" && <CaseReportPanel caseId={investigation.id} />}
+        </div>
+      )}
 
       <EvidenceDrawer
         item={evidenceDrawerItem}
@@ -336,6 +404,28 @@ export default function InvestigationWorkspacePage() {
         <BottomConsole caseId={investigation.id} />
       </div>
     </div>
+  );
+}
+
+function CaseTabBar({ value, onChange }: { value: CaseTab; onChange: (tab: CaseTab) => void }) {
+  return (
+    <nav className="flex shrink-0 overflow-x-auto border-b border-jborder/70 bg-jsurface/60 px-1">
+      {CASE_TABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={cn(
+            "relative flex shrink-0 items-center gap-1.5 px-3 py-2.5 font-mono text-[9px] uppercase tracking-wider transition-colors",
+            value === tab.id ? "text-jcyan" : "text-jmuted hover:text-jtext",
+          )}
+        >
+          <tab.Icon className="size-3" />
+          {tab.label}
+          {value === tab.id && <span className="absolute inset-x-2 bottom-0 h-0.5 bg-jcyan" />}
+        </button>
+      ))}
+    </nav>
   );
 }
 

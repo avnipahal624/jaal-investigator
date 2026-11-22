@@ -256,6 +256,7 @@ export function docToInvestigation(doc: Doc<"investigations">): Investigation {
     id: doc.caseId,
     title: doc.title,
     category: doc.category as Investigation["category"],
+    scenarioKey: doc.scenarioKey,
     description: doc.description,
     notes: doc.notes,
     status: doc.status,
