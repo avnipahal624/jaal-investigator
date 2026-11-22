@@ -1,778 +1,112 @@
-# JAAL — Agentic DAST Security Operations
+# JAAL — Scam Investigation Workspace
 
-> **Every deploy. Every endpoint. Every vulnerability investigated.**
+JAAL is a voice-first scam investigation workspace. It helps a person or investigator keep a suspicious interaction together, understand what happened, identify possible scam tactics, connect related evidence, review proposed findings, decide what to do next, and prepare a report.
 
-JAAL now contains two isolated products in one deployment:
+The product has two clearly separated modes:
 
-1. **Agentic DAST security console** (`/security`) — the TBO Security Hackathon 2026 platform described in this section.
-2. **Original JAAL forensic investigation console** (`/dashboard`, `/investigations`, `/consumer/*`) — preserved, still using its original tables, auth, evidence and reports.
+- **User-supplied evidence** — messages, notes and recordings deliberately added to a case. Analysis may be real when a provider is configured.
+- **Simulation** — synthetic scam conversations and decoy calls used for training and demonstration. Every simulated item is labeled; no real scammer is contacted.
 
-The DAST module is isolated by route prefix and by `dast*` Convex tables. It does not read, overwrite or migrate the original `investigations`, `evidence` or `reports` records. The only shared infrastructure is Convex auth, the React/Vite shell and the deployed Convex project.
+## What it does
 
-## What the platform does
+- Creates and owns scam cases.
+- Runs staged synthetic scam conversations across digital arrest, job offer, fake parcel, account takeover/OTP and blackmail scenarios.
+- Displays scam stages and detected tactics against their supporting messages.
+- Extracts indicators such as URLs, phone numbers, payment identifiers and claimed organizations.
+- Connects messages, indicators, tactics and evidence on the evidence board, with source links and a list view.
+- Preserves evidence with SHA-256 hashes and separates integrity verification from authenticity claims.
+- Attaches call recordings to a case with consent, timestamped transcription, honest provider states, audio seeking and reviewed findings.
+- Keeps a chronological timeline that distinguishes when an event happened from when JAAL learned about it.
+- Generates case-specific “What should I do now?” actions and stores manual completion state.
+- Produces a reviewed report with editable narrative, source evidence, exclusions, sensitive-material handling and export.
+- Provides a consumer experience and an investigator copilot for scam-focused assistance.
 
-JAAL answers seven operational questions after every authorized deployment:
+JAAL does not make real outbound calls, submit reports automatically, contact banks or notify authorities. Users export reports themselves.
 
-1. What changed?
-2. Which endpoints exist — including undocumented ones?
-3. Which business-logic tests are relevant?
-4. Can the suspected violation be reproduced safely?
-5. What is the travel-business impact?
-6. Who owns the fix, and what exactly should they change?
-7. Has the fix been verified by a retest?
+## Technology
 
-The implemented loop is:
+- Vite
+- React 19
+- TypeScript
+- React Router v7 (imports from `react-router`)
+- Tailwind CSS v4
+- shadcn/ui and Lucide icons
+- Framer Motion
+- Convex and Convex Auth
+- Optional Groq-backed transcription and analysis
 
-```text
-DEPLOYMENT DIFF → API DISCOVERY → KNOWLEDGE GRAPH → TARGETED PLAN
-→ SAFETY VALIDATION → HUMAN APPROVAL → CONTROLLED EXECUTION
-→ CONTROL + ATTACK VERIFICATION → SHA-256 EVIDENCE → REPORT
-→ FIXED-CONFIG RETEST
-```
+## Setup
 
-This is **not** a static dashboard. Findings are created only by deterministic tests against the isolated synthetic travel lab; the UI reads persisted Convex state and never seeds a finding.
-
-## Seven agents
-
-| Agent | Responsibility | Implemented behaviour |
-|---|---|---|
-| **Change Sentinel** | Deployment changes | Diffs v1/v2 manifests, prioritizes added/modified/deprecated endpoints, creates one idempotent investigation |
-| **Recon & Inventory** | API discovery | Probes 12 routes by synthetic role, stores observations, classifies Active/Zombie/Shadow/Unknown |
-| **Intelligent Attack Planner** | Targeted tests | Deterministic six-test catalogue selected from endpoint purpose, role and change context; LLM cannot add tests |
-| **Safe Execution** | Scope + budget | Exact host/path/method checks, per-plan budgets, approval gate, emergency stop, execution records |
-| **Verification** | False-positive control | Requires a passing control request **and** a boundary-crossing attack response; a generic 200 is insufficient |
-| **Triage & Reporting** | Impact + evidence | Separate technical/business severity, sanitized evidence, SHA-256 seal, owner assignment, Markdown report |
-| **Automated Retest** | Fix confirmation | Replays the original test with the fixed lab configuration; only marks FIXED when the violation is absent |
-
-Every agent row persists `status`, `currentTask`, `lastRunAt`, `durationMs`, `success`, `error`, `paused` and `lastInvestigationId`.
-
-## Architecture
-
-```text
-┌──────────────────────────── React / Vite / Tailwind ────────────────────────────┐
-│  /security console: Overview · Investigations · API Explorer · Graph             │
-│  Agents · Vulnerabilities · Deployments · Evidence · Reports · Safety            │
-└───────────────────────────────────┬──────────────────────────────────────────────┘
-                                    │ Convex reactive queries/mutations
-┌───────────────────────────────────▼──────────────────────────────────────────────┐
-│                         Convex orchestration layer                               │
-│  triggerDeployment → discovery → planning → approval → execution → report        │
-│  approveInvestigation · executeInvestigation · retestFinding · retestAll         │
-│  owner-scoped `dast*` tables · persistent jobs · append-only audit               │
-└───────────────────────────────────┬──────────────────────────────────────────────┘
-                                    │ in-process synthetic transport
-┌───────────────────────────────────▼──────────────────────────────────────────────┐
-│                    Isolated Synthetic Travel Security Lab                       │
-│  Agency A/B · admin/sub-agent/platform roles · bookings · fares · refunds       │
-│  vulnerable + fixed configurations · no network, no real traveller data          │
-└──────────────────────────────────────────────────────────────────────────────────┘
-```
-
-See [`docs/DAST_ARCHITECTURE.md`](docs/DAST_ARCHITECTURE.md) for the agent/state diagram and safety boundary, [`docs/DAST_PHASE0_AUDIT.md`](docs/DAST_PHASE0_AUDIT.md) for the Phase 0 feature matrix and residual risks, and [`docs/DAST_EXTERNAL_EXECUTION_DESIGN.md`](docs/DAST_EXTERNAL_EXECUTION_DESIGN.md) for the disabled external-runner design, and [`docs/DAST_PHASE1_UI_SECURITY.md`](docs/DAST_PHASE1_UI_SECURITY.md) for the Phase 1 UI and security preparation report.
-
-## Synthetic travel lab
-
-The lab is deliberately **local and in-process** so the demonstration cannot scan an external system. It is labelled as synthetic throughout the UI.
-
-| Scenario | Synthetic fixture | Vulnerable behaviour | Fixed behaviour |
-|---|---|---|---|
-| Cross-agency booking access | Agency B admin reads `BK-A-1001` owned by Agency A | 200 + Agency A traveller/PNR | 404, no data |
-| Sub-agent credit escalation | Agency A sub-agent adjusts agency credit | 200 applied | 403 |
-| Fare tampering | Client submits INR 1 against INR 48,200 base | accepted | recomputed/rejected |
-| Refund replay | Same idempotency key twice | second refund created | original refund returned |
-| Zombie legacy reader | Unauthenticated request to deprecated booking route | 200 + traveller data | 401/404 |
-| Shadow metrics route | Agency A admin reads undocumented metrics | sees Agency B metrics | only own agency |
-
-All six scenarios have a control and attack assertion. The controls also pass under the fixed configuration, proving the tests detect the vulnerability rather than merely failing to connect.
-
-## Safety and scope
-
-- Exact host allowlist: `lab.jaal.internal`
-- HTTPS only; GET and POST only; redirects disabled
-- Path scope: `/api/*`
-- Per-plan request budget and global run ceiling
-- Human approval required before active execution; the approval is bound to SHA-256 plan and scope digests, expires after 30 minutes and is consumed once
-- A policy update cannot disable the approval gate
-- Global emergency stop expires pending and approved gates, cancels queued/waiting work and blocks new runs
-- Sanitized evidence: email, PNR, authorization, cookie and token fields are redacted
-- SHA-256 evidence hashes computed server-side from the sanitized exchange
-- Owner-scoped queries/mutations; cross-owner access is rejected
-- No external target registration in the demo, no real credentials, no real payments
-
-## Setup and run
-
-The project is already configured for this Freebuff/Convex environment.
+The project is configured for the Freebuff/Convex environment. The platform runs the managed dev server and Convex process.
 
 ```bash
 bun install
 bun convex dev --once   # regenerate Convex bindings
 bunx tsc -b --noEmit    # typecheck
-bunx vitest run         # full test suite
+bunx vitest run         # test suite
 ```
 
-The managed dev server and Convex process are started by the platform. Do not start a second dev server manually.
+Do not start a second dev server manually.
 
-### Environment variables
+### Environment
 
-No DAST-specific secrets are required. The module reuses:
+- `VITE_CONVEX_URL` — client Convex URL, already configured for the environment.
+- `CONVEX_DEPLOYMENT` — Convex CLI deployment, already configured.
+- Convex Auth variables already used by the app (`JWKS`, `JWT_PRIVATE_KEY`, `SITE_URL`).
+- Optional `GROQ_API_KEY` — enables real speech-to-text and voice analysis when configured server-side. Keys stay on Convex and are never exposed to the browser.
 
-- `VITE_CONVEX_URL` (client, already configured)
-- `CONVEX_DEPLOYMENT` (CLI, already configured)
-- Convex auth variables already used by the original app (`JWKS`, `JWT_PRIVATE_KEY`, `SITE_URL`)
-- Optional `GROQ_API_KEY` for the existing AI features and the optional DAST advisory rationale action; the deterministic DAST planner does not require it
+When no speech provider is configured, voice intake reports transcription as unavailable rather than inventing a transcript.
 
-A template is provided in [`docs/dast.env.example`](docs/dast.env.example). Do not commit real secrets.
+## Main routes
 
-## Demo walkthrough
+- `/` — product landing page
+- `/dashboard` — investigator dashboard
+- `/investigations` — cases
+- `/investigations/new` — create a case or synthetic scenario
+- `/investigations/:id` — case workspace: Overview, Voice & Calls, Evidence Board, Timeline, Actions, Report
+- `/evidence` — evidence archive
+- `/voice-intake` — recording intake
+- `/reports` and `/reports/:id` — reports and printable report view
+- `/consumer/*` — consumer-facing scam guidance and reports
 
-1. Open `/`, then **Open security operations** (or `/security`). Sign in with the existing email OTP or simulation login.
-2. On **Overview**, press **Initialize synthetic lab**. This registers the target, policy, seven agents and the baseline deployment. No findings exist yet.
-3. Press **Trigger deployment**. JAAL records `travel-platform-2026.11.1`, diffs four changes, probes the API, discovers 12 endpoints (10 active, 1 zombie, 1 shadow), plans six tests and stops at **Awaiting approval**.
-4. Open the investigation and review the plans, fixtures, budgets and safety gate. Press **Approve & execute**.
-5. Execution runs a control and an attack request per test, verifies six findings, seals six SHA-256 evidence artifacts and generates a report.
-6. Open **Vulnerabilities** → a finding to inspect expected/actual behaviour, sanitized request/response, reproduction, remediation and integrity verification.
-7. Open **Reports** → the generated report → **Print / save PDF**, Markdown or JSON.
-8. Return to **Vulnerabilities** and press **Apply fix & retest all**. The fixed lab configuration is applied and all six findings are marked **FIXED** with retest evidence.
-9. Open **Settings** to inspect the allowlist, budgets, approval policy, lab mode, emergency stop and append-only audit.
+All investigator routes are authenticated. Case, voice, evidence, action and report records are owner-scoped and checked server-side.
 
-The same flow is covered by the integration test, so it can be verified without the browser.
+## Evidence rules
 
-## Finding lifecycle
+- Original source messages and recordings are preserved.
+- Transcript corrections and analyst review verdicts are stored separately with timestamps.
+- AI-generated interpretation is shown as a suggestion, not a confirmed scam.
+- A finding keeps its source message or audio timestamp wherever possible.
+- Simulation provenance is visible in conversations, the timeline, the evidence flow and reports.
+- Sensitive blackmail excerpts are hidden by default.
+- Report export can exclude findings, tactics and sensitive material; this never edits the original evidence.
+- SHA-256 proves content integrity only. It does not prove authorship, truth or legal admissibility.
 
-`SUSPECTED → VERIFYING → VERIFIED / FALSE_POSITIVE / INCONCLUSIVE / NEEDS_HUMAN_REVIEW`
+## Voice and calls
 
-A finding is only written when:
+Users explicitly choose and consent to upload a recording. The server verifies the stored bytes against the submitted SHA-256, then runs transcription and analysis through the configured provider. Processing states include queued, transcribing, analysing, ready, no speech, unavailable and failed.
 
-- the target is authorized,
-- the plan passed scope validation,
-- the control assertion passed, and
-- the attack assertion demonstrated the stated boundary violation.
+The Call Companion can capture microphone audio after explicit browser permission and analyse it after recording. It cannot listen to a cellular phone line and does not claim live captions.
 
-Each finding stores the sanitized request/response, SHA-256, confidence, technical and business severity, owner, affected roles, root cause, remediation, reproduction and retest history.
+The AI Decoy Call is a bounded, clearly labeled simulation. It uses deterministic scenario scripts, cannot dial a real number, can be paused or ended, and its turns are added to the case only on request with simulation provenance.
 
 ## Testing
 
 ```bash
-bunx vitest run src/convex/dast/engine.test.ts
-bunx vitest run src/convex/dast.test.ts
 bunx vitest run
 ```
 
-Last verified run:
-
-- **368 tests passed** across **21 files**
-- DAST engine: **14 tests** (all six vulnerable scenarios verify, all six fixed scenarios reject, scope/redirect/host/port/path/method/budget checks)
-- DAST integration: **18 tests** (seed, detect→discover→plan, optional AI advisory, approval refusal, plan-digest tamper, stale approval, replay, concurrent execution, policy invalidation, preflight budget, retest idempotency, execution/evidence/report, owner isolation, emergency stop, reset)
-- Canonical serialization and recursive redaction: **7 focused tests**
-- `bunx convex dev --once` and `bunx tsc -b --noEmit` complete with exit 0
-
-No browser interaction test has been run in this environment; visual review is still recommended.
-
-## Implementation status
-
-### Working end-to-end
-
-- Isolated synthetic lab and target allowlist
-- Deployment change detection and idempotent investigation creation
-- Role-aware API discovery and inventory persistence
-- Active/Zombie/Shadow classification with observation evidence
-- Six deterministic business-logic tests
-- Optional schema-validated Groq advisory rationales (advisory only)
-- Human approval gate and server-enforced safety policy
-- Control + attack verification
-- Sanitized evidence + SHA-256 integrity
-- Reports, ticket-ready Markdown, browser PDF
-- Automated fixed-config retest requiring explicit operator confirmation
-- Owner isolation, emergency stop, audit trail
-- Ten-page security console driven by live Convex data
-- Interactive knowledge graph and inferred OpenAPI export
-
-### Partial / deliberately limited
-
-- The lab is **in-process**, not a separate Node worker or network service. The orchestration and approval model is real, but long-running queue leases are represented by persistent job rows rather than a separate worker daemon.
-- Attack-plan selection and execution are deterministic. With `GROQ_API_KEY` configured, an optional action can attach schema-validated Groq advisory rationales to the already-selected plans; the text is stored separately, stripped of links and never used for execution. Without a key, the UI reports that the advisory is unavailable. The live Groq call is not covered by the offline test suite.
-- PDF is produced through the browser print pipeline rather than a server-side PDF library.
-- Target registration is limited to the synthetic lab; arbitrary external target onboarding is intentionally disabled.
-- Request budget and per-plan caps are enforced. The in-process lab executes sequentially, so concurrency/rate-limit policy values are recorded and configurable but do not throttle a network connection.
-- Retesting is manual or batch-triggered from the console; automatic retest dispatch from a deployment webhook is not wired.
-
-### Not implemented
-
-- Playwright browser crawler and HAR ingestion
-- OWASP ZAP active/passive integration
-- Jira/GitHub Issues API adapters (ticket Markdown export is implemented)
-- Organization/multi-tenant RBAC beyond owner scoping
-- Evidence retention automation and scheduled retests
-- Signed CI/CD webhook verification
-
-These are reported honestly rather than simulated. The synthetic lab is the only execution target.
-
----
-
-# Original JAAL Forensic Console
-
-## Overview
-
-JAAL Investigator is a **scam-analysis training simulation**. Every case, message, identifier and timestamp in the app is synthetic; no real scammers or third parties are ever contacted.
-
-This project uses the following tech stack:
-- Vite
-- Typescript
-- React Router v7 (all imports from `react-router` instead of `react-router-dom`)
-- React 19 (for frontend components)
-- Tailwind v4 (for styling)
-- Shadcn UI (for UI components library)
-- Lucide Icons (for icons)
-- Convex (for backend & database)
-- Convex Auth (for authentication)
-- Framer Motion (for animations)
-- Three js (for 3d models)
-
-All relevant files live in the 'src' directory.
-
-Use bun for the package manager.
-
-## Setup
-
-This project is set up already and running on a cloud environment, as well as a convex development in the sandbox.
-
-## Environment Variables
-
-The project is set up with project specific CONVEX_DEPLOYMENT and VITE_CONVEX_URL environment variables on the client side.
-
-The convex server has a separate set of environment variables that are accessible by the convex backend.
-
-Currently, these variables include auth-specific keys: JWKS, JWT_PRIVATE_KEY, and SITE_URL.
-
-
-# Using Authentication (Important!)
-
-You must follow these conventions when using authentication.
-
-## Auth is already set up.
-
-All convex authentication functions are already set up. The auth currently uses email OTP and anonymous users, but can support more.
-
-The email OTP configuration is defined in `src/convex/auth/emailOtp.ts`. DO NOT MODIFY THIS FILE.
-
-Also, DO NOT MODIFY THESE AUTH FILES: `src/convex/auth.config.ts` and `src/convex/auth.ts`.
-
-## Using Convex Auth on the backend
-
-On the `src/convex/users.ts` file, you can use the `getCurrentUser` function to get the current user's data.
-
-## Using Convex Auth on the frontend
-
-The `/auth` page is already set up to use auth. Navigate to `/auth` for all log in / sign up sequences.
-
-You MUST use this hook to get user data. Never do this yourself without the hook:
-```typescript
-import { useAuth } from "@/hooks/use-auth";
-
-const { isLoading, isAuthenticated, user, signIn, signOut } = useAuth();
-```
-
-## Protected Routes
-
-The starter `/dashboard` route is protected with `RequireAuth`. Extend that page
-for the product's authenticated experience, and reuse `RequireAuth` when adding
-another protected route — do NOT hand-roll a redirect to `/auth`, since landing
-on a bare sign-in form with no explanation of what was blocked is confusing.
-
-`RequireAuth` states the block on the page the visitor asked for and sends them
-to `/auth?returnTo=<current route>` when they choose to sign in, so they come
-back to it. Pass `title` and `description` to say what the page is:
-
-```tsx
-<Route
-  path="/dashboard"
-  element={
-    <RequireAuth
-      title="Sign in to view your dashboard"
-      description="Your projects and settings live here."
-    >
-      <Dashboard />
-    </RequireAuth>
-  }
-/>
-```
-
-Pass `redirectImmediately` for a route where bouncing straight to `/auth` really
-is better.
-
-## Auth Page
-
-The auth page is defined in `src/pages/Auth.tsx`. Send sign-in and sign-up actions
-to `/auth`.
-
-## Authorization
-
-You can perform authorization checks on the frontend and backend.
-
-On the frontend, you can use the `useAuth` hook to get the current user's data and authentication state.
-
-You should also be protecting queries, mutations, and actions at the base level, checking for authorization securely.
-
-## Adding a redirect after auth
-
-The `/auth` route in `src/main.tsx` redirects to `/dashboard` by default. If the
-product's main authenticated route is different, update `redirectAfterAuth` to
-that route. A validated same-origin `returnTo` query parameter takes priority so
-users can resume the protected page they originally requested. Never leave an
-authenticated product redirecting back to the public landing page.
-
-## Complete authenticated products
-
-When the requested product implies accounts, a workspace, a dashboard, or other
-signed-in functionality, the task is not complete with only a landing page and
-auth form. Build the main authenticated experience, protect its route, and verify
-that signing in reaches it.
-
-# Frontend Conventions
-
-You will be using the Vite frontend with React 19, Tailwind v4, and Shadcn UI.
-
-Generally, pages should be in the `src/pages` folder, and components should be in the `src/components` folder.
-
-Shadcn primitives are located in the `src/components/ui` folder and should be used by default.
-
-## Page routing
-
-Your page component should go under the `src/pages` folder.
-
-When adding a page, update the react router configuration in `src/main.tsx` to include the new route you just added.
-
-## Shad CN conventions
-
-Follow these conventions when using Shad CN components, which you should use by default.
-- Remember to use "cursor-pointer" to make the element clickable
-- For title text, use the "tracking-tight font-bold" class to make the text more readable
-- Always make apps MOBILE RESPONSIVE. This is important
-- AVOID NESTED CARDS. Try and not to nest cards, borders, components, etc. Nested cards add clutter and make the app look messy.
-- AVOID SHADOWS. Avoid adding any shadows to components. stick with a thin border without the shadow.
-- Avoid skeletons; instead, use the loader2 component to show a spinning loading state when loading data.
-
-
-## Landing Pages
-
-You must always create good-looking designer-level styles to your application. 
-- Make it well animated and fit a certain "theme", ie neo brutalist, retro, neumorphism, glass morphism, etc
-
-Use known images and emojis from online.
-
-If the user is logged in already, show the get started button to say "Dashboard" or "Profile" instead to take them there.
-
-## Responsiveness and formatting
-
-Make sure pages are wrapped in a container to prevent the width stretching out on wide screens. Always make sure they are centered aligned and not off-center.
-
-Always make sure that your designs are mobile responsive. Verify the formatting to ensure it has correct max and min widths as well as mobile responsiveness.
-
-- Always create sidebars for protected dashboard pages and navigate between pages
-- Always create navbars for landing pages
-- On these bars, the created logo should be clickable and redirect to the index page
-
-## Animating with Framer Motion
-
-You must add animations to components using Framer Motion. It is already installed and configured in the project.
-
-To use it, import the `motion` component from `framer-motion` and use it to wrap the component you want to animate.
-
-
-### Other Items to animate
-- Fade in and Fade Out
-- Slide in and Slide Out animations
-- Rendering animations
-- Button clicks and UI elements
-
-Animate for all components, including on landing page and app pages.
-
-## Three JS Graphics
-
-Your app comes with three js by default. You can use it to create 3D graphics for landing pages, games, etc.
-
-
-## Colors
-
-You can override colors in: `src/index.css`
-
-This uses the oklch color format for tailwind v4.
-
-Always use these color variable names.
-
-Make sure all ui components are set up to be mobile responsive and compatible with both light and dark mode.
-
-Set theme using `dark` or `light` variables at the parent className.
-
-## Styling and Theming
-
-When changing the theme, always change the underlying theme of the shad cn components app-wide under `src/components/ui` and the colors in the index.css file.
-
-Avoid hardcoding in colors unless necessary for a use case, and properly implement themes through the underlying shad cn ui components.
-
-When styling, ensure buttons and clickable items have pointer-click on them (don't by default).
-
-Always follow a set theme style and ensure it is tuned to the user's liking.
-
-## Toasts
-
-You should always use toasts to display results to the user, such as confirmations, results, errors, etc.
-
-Use the shad cn Sonner component as the toaster. For example:
-
-```
-import { toast } from "sonner"
-
-import { Button } from "@/components/ui/button"
-export function SonnerDemo() {
-  return (
-    <Button
-      variant="outline"
-      onClick={() =>
-        toast("Event has been created", {
-          description: "Sunday, December 03, 2023 at 9:00 AM",
-          action: {
-            label: "Undo",
-            onClick: () => console.log("Undo"),
-          },
-        })
-      }
-    >
-      Show Toast
-    </Button>
-  )
-}
-```
-
-Remember to import { toast } from "sonner". Usage: `toast("Event has been created.")`
-
-## Dialogs
-
-Always ensure your larger dialogs have a scroll in its content to ensure that its content fits the screen size. Make sure that the content is not cut off from the screen.
-
-Ideally, instead of using a new page, use a Dialog instead. 
-
-# JAAL Backend (Convex)
-
-The investigation workflow runs on the managed Convex deployment — there is no separate API server. All case data lives in Convex tables and the React UI subscribes to it in real time.
-
-## Architecture
-
-- `src/convex/schema.ts` — tables: `investigations`, `sessions`, `messages`, `evidence`, `tactics`, `events`, `logs`, `strategies`, `reports`, `settings`, `users`.
-- `src/convex/jaal.ts` — public queries/mutations: `state` (reactive workspace snapshot), `createInvestigation`, `sendMessage`, `simulationNext`, `ingestMessages`, `generateHash`, `verifyEvidence`, `setEvidenceContent` / `setEvidenceNotes`, `setRunStatus`, `completeInvestigation`, `resetCase`, `generateReport`, `seedDemo`, `updateSettings`, and more.
-- `src/convex/lib/backend.ts` — the shared pipeline: tactic detection, kill-chain progression, identifier extraction (UPI/VPA, phone, payment amount, link, IP, email), server-side SHA-256 hashing, activity events and log entries. Original message content is never mutated.
-- `src/convex/ai.ts` — Groq LLM calls (`"use node"` action) for investigation strategy and report summaries. All AI features share the transport in `src/convex/groqClient.ts`; the legacy `anthropicClient.ts` is retained but no longer called.
-- `src/convex/actions.ts` — action wrappers (`sendMessageWithAI`, `simulationNextWithAI`, `generateReportWithAI`, `approveStrategyWithAI`) that try the LLM first and fall back to the deterministic simulation engine, labelled `SIMULATION` in logs and in the UI.
-- `src/state/JaalProvider.tsx` — hydrates the frontend from `api.jaal.state` via `useQuery` and routes every command through mutations/actions. A local reducer remains only as an offline fallback.
-
-## Full verified workflow
-
-create → message (operator or simulated) → analysis (tactics + intent + strategy) → evidence extraction → SHA-256 hash → integrity verify (match / tamper / mismatch) → kill-chain progression → complete → report generation. Evidence integrity is verifiable from the client SHA-256 as well as the server hash.
-
-## Engine modes
-
-- **GROQ** — set `GROQ_API_KEY` (and optionally `GROQ_MODEL`, default `openai/gpt-oss-120b`) on the Convex deployment: `npx convex env set GROQ_API_KEY gsk_...`. Strategy, summary, intelligence modules, copilot, safety assistant, consumer content analysis and voice analysis all call Groq over its OpenAI-compatible chat API; the UI labels the engine "GROQ". Rows written before the migration keep their legacy `ANTHROPIC` label and still display as AI-assisted.
-- **SIMULATION** (default, no key required) — every action falls back to the deterministic rules engine and the UI is clearly labelled "Simulation mode — analysis engine".
-
-Every Groq call shares one transport contract. Each attempt has a hard 25 s
-timeout; only transient failures (408/409/429/5xx/network) are retried, up to
-three attempts, with exponential backoff and jitter. A valid `Retry-After` is
-honoured instead of the local backoff, but a delay longer than 8 s fails fast
-with a `groq-rate-limited` status (and the requested wait) so an action is never
-held open waiting out a quota window. Auth and validation failures are never
-retried. A response cut off by the completion budget (`finish_reason: "length"`)
-is an error, never a "complete" answer, and errors are reduced to stable,
-content-free codes (never the key or provider body). Reasoning models get their
-intended answer budget plus 512 tokens of reasoning headroom rather than a flat
-floor, so small per-feature budgets stay small; server-side zod validation still
-gates every stored output.
-
-## Recorded-call transcription (Groq Cloud)
-
-Recorded-call audio is transcribed on the Convex backend by Groq's
-OpenAI-compatible audio API — `whisper-large-v3-turbo` with `verbose_json`, so
-real segment timestamps are available for grounding. Set `GROQ_API_KEY` (or the
-generic `STT_API_KEY`) on the deployment:
-`npx convex env set GROQ_API_KEY gsk_...`. `STT_MODEL`, `STT_ENDPOINT` and
-`STT_PROVIDER_NAME` override the defaults for another compatible provider, and
-the stored provider label is derived from the endpoint actually called. Without
-a key, transcription returns UNAVAILABLE rather than inventing a transcript.
-
-To verify a deployment without uploading a recording, run
-`npx convex run sttDiagnostics:check`. The internal-only action sends a
-public-domain speech sample through the same upload path and reports the
-provider, whether authentication passed, and how many reference words were
-recognised. It never returns the key or the provider's raw response.
-
-A non-empty transcript is not treated as proof of speech. When every segment's
-`no_speech_prob` is high **and** its `avg_logprob` is poor, when the WAV is
-shorter than 250 ms, or when a PCM WAV contains digital silence (no signal at
-all) — the recording is stored as `NO_SPEECH` and no transcript or analysis is
-produced. The signal-level check exists because Groq's turbo model has been
-observed returning `no_speech_prob: 0` for a silent file while hallucinating
-"Thank you.". Missing metadata never counts as silence, and quiet speech that
-decodes confidently is kept.
-
-To verify every AI workflow against Groq without touching case data, run
-`npx convex run aiSmoke:run`. It sends one synthetic, non-sensitive example
-through each production prompt and schema and reports whether the provider
-answered, whether the output validated, and the completion/reasoning token
-count. Run one workflow at a time (`'{"only":"voice-analysis"}'`) on a
-free-tier key: a ten-workflow burst can exhaust the per-minute token budget.
-
-## Voice intake reliability
-
-- **Submission is idempotent.** `voice.createVoiceReport` accepts an optional
-  client `idempotencyKey`; a retried tap, lost response or screen re-entry with
-  the same key returns the report that already exists. Reusing the same uploaded
-  blob also returns the existing report, and a storage id owned by another
-  account is rejected.
-- **Processing is single-flight.** A persisted lease (4 minutes, expiring on its
-  own if an action is killed) allows one run per recording and one heavy voice
-  pipeline per account. A duplicate tap gets `ALREADY_PROCESSING`/`OWNER_BUSY`
-  instead of a second provider call; a retry after a crash can resume once the
-  lease lapses, and stale `PROCESSING` flags are reset.
-- **Completed work is reused.** A stored machine transcript is never re-requested
-  or overwritten on retry, and a completed analysis is not recomputed. Typed
-  transcripts invalidate the analysis that described different text.
-- **Integrity is re-checked before analysis.** The stored blob must match both
-  the recorded SHA-256 and the declared byte size; otherwise nothing is analysed.
-  The hash proves consistency with the upload baseline, not who recorded it.
-- **Rate limits are honest.** A 429/5xx leaves the transcript saved, stores a
-  retryable status (`groq-rate-limited`, `groq-unavailable`, …) and shows
-  retry guidance — never a fabricated result and never a "success".
-
-Convex-side keys are never exposed to the browser bundle.
-
-## Security, privacy & evidence-integrity notes
-
-These are deliberate limitations of the current implementation — read them
-before treating any JAAL output as authoritative.
-
-**Authentication & ownership**
-
-- Every guest login (`signInDemo` on the login page, `/auth` guest button)
-  establishes a Convex Auth **Anonymous** identity, so each browser session
-  gets its own unguessable server-validated owner ID. There is no shared or
-  predictable owner anywhere in the backend.
-- All mutations and case-scoped queries call `requireOwner` and throw an
-  authorization error when unauthenticated; case lookups always resolve
-  through the owner index, never a client-claimed `caseId` alone.
-- Frontend local state (localStorage reducer) is a convenience/offline layer
-  only — the backend never reads or trusts it.
-
-**Data retention & deletion**
-
-- All case data (investigations, messages, evidence, reports, logs, events,
-  `ai_requests`) lives in owner-scoped rows on the Convex deployment.
-- Deleting data: `jaal.resetCase` removes one case's runtime; `jaal.resetDemo`
-  wipes and reseeds the demo cases; removing the Convex deployment (or its
-  tables via the dashboard) deletes everything. There is currently no
-  automated retention schedule or per-case export job.
-- Conversation content and credentials are never written to `console.*` on
-  either side. Dashboard aggregates mask sensitive identifiers (emails,
-  phones, VPAs) before display.
-
-**Evidence integrity (SHA-256)**
-
-- Hashing proves **only** that content is byte-identical to a recorded
-  baseline. A SHA-256 value is **not** a legal authentication, digital
-  signature, notarization, or trusted timestamp — JAAL does not implement
-  RFC 3161 timestamps, signing keys, or a chain-of-custody log, and a hash
-  alone would not establish provenance in court.
-- Hash generation ≠ verification. States are distinct: `NOT_HASHED`,
-  `HASH_GENERATED`, `INTEGRITY_VERIFIED`, `HASH_MISMATCH`,
-  `TAMPER_SIMULATION`. Verification re-computes and compares; a mismatch
-  persists until an explicit re-baseline (`jaal.rebaselineEvidence`), which
-  is authenticated, requires a reason, and preserves the original hash and
-  full history (`hashHistory`, `contentHistory`, `verificationHistory`).
-  Rehashing never silently clears a mismatch.
-- `jaal.setEvidenceContent` is a **tamper-simulation** control for demos: it
-  records an `integrity_mismatch` event, snapshots the original content, and
-  flags the record — it does not overwrite the baseline.
-
-**AI handling & prompt injection**
-
-- LLM actions take only a `caseId`; the transcript is fetched server-side
-  through an ownership-checked query, rate-limited (8 requests / 60s per
-  owner, `ai_requests` table), and size-capped before being sent.
-- Transcript text is treated as **untrusted data**: it is passed inside
-  explicit `<transcript>` delimiters with instructions never to follow
-  commands found in it, control characters are stripped, and outputs are
-  zod-validated. This is a **best-effort defense, not a guarantee** — a
-  sufficiently adversarial transcript may still influence model output.
-  AI results are always labelled (GROQ vs SIMULATION engine; legacy rows may
-  read ANTHROPIC) and AI-assisted content is separated from rule-based
-  findings in reports.
-- The Groq key lives only in Convex environment variables (`GROQ_API_KEY`);
-  it is never sent to the browser or logged.
-
-**Detection honesty**
-
-- Identifier extraction is deterministic rule-based detection (regex +
-  validation) with per-item confidence and detection method — a triage aid,
-  not proof of fraud. Each extracted item keeps its original source text and
-  source-message link; obfuscated forms (hxxp, `[dot]`) are flagged as such.
-- Reports separate: original conversation evidence, rule-based findings,
-  AI-assisted interpretations, human-reviewed findings, unverified
-  assumptions, and simulation-only content, plus the hash algorithm
-  (SHA-256), generation timestamp and report version.
-
-## API reference (frontend service contract)
-
-The React app calls these through `src/state/JaalProvider.tsx`; they are the
-equivalent of the REST surface (REST-style paths in parentheses).
-
-**Queries**
-
-| Function | Purpose |
-| --- | --- |
-| `jaal.state` (`GET /api/state`) | Full owner-scoped workspace: investigations, sessions (messages, evidence, tactics, stages, logs, events, strategy), reports, settings. Reactive — this is the real-time channel. |
-| `jaal.dashboard` (`GET /api/dashboard`) | Counts + recent activity computed from the database. |
-| `jaal.investigationMeta` (`GET /api/investigations/:id`) | Tactics + detected-stage labels for report generation. |
-| `jaal.pendingStrategy` (`GET /api/investigations/:id/strategy`) | Current pending strategy suggestion. |
-| `jaal.getReport` / `jaal.reports` (`GET /api/reports[/:id]`) | Generated reports. |
-| `jaal.getEvidence` (`GET /api/evidence/:id`) | Evidence + original source message. |
-| `jaal.getSettings` (`GET /api/settings`) | Owner settings. |
-
-**Mutations**
-
-| Function | Purpose |
-| --- | --- |
-| `jaal.createInvestigation` (`POST /api/investigations`) | Create case, seed opening line, run pipeline, build strategy. |
-| `jaal.sendMessage` (`POST /api/investigations/:id/messages`) | Save decoy message, generate contextual scammer reply, run full pipeline. Rate-limited per case. |
-| `jaal.simulationNext` (`POST /api/investigations/:id/simulation/next`) | Advance the scripted arc. |
-| `jaal.ingestMessages` | Bulk transcript import (content preserved verbatim). |
-| `jaal.setRunStatus` (`POST .../pause|resume`) | Pause/resume the simulation. |
-| `jaal.completeInvestigation` (`POST .../complete`) | Stop the run, auto-generate the final report. |
-| `jaal.archiveInvestigation` (`POST .../archive`) | Archive without deleting evidence/reports. |
-| `jaal.resetCase` / `jaal.seedDemo` / `jaal.resetDemo` | Demo lifecycle (reset restores the clean seeded demo state). |
-| `jaal.generateHash` (`POST /api/evidence/:id/hash`) | On-demand SHA-256. |
-| `jaal.verifyEvidence` (`POST /api/evidence/:id/verify`) | Recompute + compare → `match` / `mismatch` + integrity event. |
-| `jaal.setEvidenceContent` | Tamper simulation for integrity demos (flags the record). |
-| `jaal.setEvidenceNotes` (`PATCH /api/evidence/:id/notes`) | Analyst notes; never alters the hashed snapshot. |
-| `jaal.generateReport` (`POST /api/investigations/:id/report`) | Build report from stored data. |
-| `jaal.clearLogs` | Clear a case's console lines. |
-| `jaal.updateSettings` (`PATCH /api/settings`) | Validated settings patch, persisted per owner. |
-
-**Actions (LLM-augmented)**
-
-| Function | Purpose |
-| --- | --- |
-| `actions.sendMessageWithAI` | Tries Groq for strategy/reply context, falls back to the simulation engine (labeled). |
-| `actions.simulationNextWithAI` | Same for arc advancement. |
-| `actions.approveStrategyWithAI` | Sends the approved (possibly edited) decoy question through the pipeline. |
-| `actions.generateReportWithAI` | LLM report summary when configured, deterministic otherwise. |
-
-All functions enforce owner authorization server-side; case-scoped mutations
-resolve the investigation through the owner index and never trust a
-client-claimed caseId alone.
-
-## Testing
+The suite covers authentication and owner isolation, evidence integrity, voice intake and provider states, simulation behavior, evidence graph relationships, reports and the case workspace. Convex bindings are generated with:
 
 ```bash
-bun run test        # vitest run — 107 tests across 7 files
+bunx convex dev --once
 ```
 
-- `src/services/pipeline.test.ts` — unit tests for tactic detection, kill-chain
-  progression, identifier extraction (incl. dedupe, false-positive guards,
-  multi-match, obfuscated URLs and phone validation), SHA-256 (canonical test
-  vector), tamper detection, strategy generation, simulation branching and
-  report building.
-- `src/services/transcriptParser.test.ts` — all supported import formats,
-  ordering, multiline continuation and honest import statistics (unparsed
-  lines are counted, never silently dropped).
-- `src/convex/workflow.test.ts` — integration tests against the mock Convex
-  runtime (`convex-test`): create → message → analyze → extract → hash →
-  verify (match, then tamper → mismatch) → complete → report; plus dedupe
-  across messages, per-case rate limiting, pause/resume, archive, settings
-  persistence, demo seed/reset, and cross-owner authorization rejection.
-- `src/convex/security.test.ts` — unauthenticated rejection on every write
-  path, cross-owner isolation (reads and mutations), the AI request rate
-  limit, and the full evidence lifecycle: generation ≠ verification,
-  persistent HASH_MISMATCH, refusal to rehash on mismatch, reason-bound
-  re-baseline with preserved hash/verification history, and tamper
-  simulation keeping the original snapshot.
-- `src/convex/evidenceGraph.test.ts` — graph projection cross-checked against
-  the underlying tables, per-owner isolation, stable ids.
-- `src/theme/status.test.ts` — screen/paper status palette contracts.
+## Repository layout
 
-The suite runs entirely without an external AI provider (simulation engine).
-
-## Verifying the backend from the CLI
-
-```bash
-npx convex run jaal:seedDemo '{}'
-npx convex run jaal:createInvestigation '{caseId:"JAAL-100",title:"Test",category:"Digital arrest scam",description:"d",notes:"n",source:"simulation",detectionMode:"simulation",flags:{tacticDetection:true,identifierExtraction:true,integrityHashing:true,aiSuggestions:true}}'
-npx convex run actions:sendMessageWithAI '{caseId:"JAAL-100",text:"Which department is issuing this notice?"}'
-npx convex run jaal:state '{}'
-npx convex run jaal:resetDemo '{}'   # wipe + restore the clean demo cases
-```
-
-## Running locally
-
-```bash
-bun install
-bun run dev        # Vite dev server (frontend + Convex via VITE_CONVEX_URL)
-npx convex dev     # Convex dev process (pushes functions, syncs deployment)
-bun run test       # backend + service test suite
-bunx tsc -b --noEmit   # typecheck
-```
-
-No separate API server is required — Convex is the backend. Demo mode works
-with zero configuration; add `ANTHROPIC_API_KEY` to enable the LLM engine.
-
-# Using the Convex backend
-
-You will be implementing the convex backend. Follow your knowledge of convex and the documentation to implement the backend.
-
-## The Convex Schema
-
-You must correctly follow the convex schema implementation.
-
-The schema is defined in `src/convex/schema.ts`.
-
-Do not include the `_id` and `_creationTime` fields in your queries (it is included by default for each table).
-Do not index `_creationTime` as it is indexed for you. Never have duplicate indexes.
-
-
-## Convex Actions: Using CRUD operations
-
-When running anything that involves external connections, you must use a convex action with "use node" at the top of the file.
-
-You cannot have queries or mutations in the same file as a "use node" action file. Thus, you must use pre-built queries and mutations in other files.
-
-You can also use the pre-installed internal crud functions for the database:
-
-```ts
-// in convex/users.ts
-import { crud } from "convex-helpers/server/crud";
-import schema from "./schema.ts";
-
-export const { create, read, update, destroy } = crud(schema, "users");
-
-// in some file, in an action:
-const user = await ctx.runQuery(internal.users.read, { id: userId });
-
-await ctx.runMutation(internal.users.update, {
-  id: userId,
-  patch: {
-    status: "inactive",
-  },
-});
-```
-
-
-## Common Convex Mistakes To Avoid
-
-When using convex, make sure:
-- Document IDs are referenced as `_id` field, not `id`.
-- Document ID types are referenced as `Id<"TableName">`, not `string`.
-- Document object types are referenced as `Doc<"TableName">`.
-- Keep schemaValidation to false in the schema file.
-- You must correctly type your code so that it passes the type checker.
-- You must handle null / undefined cases of your convex queries for both frontend and backend, or else it will throw an error that your data could be null or undefined.
-- Always use the `@/folder` path, with `@/convex/folder/file.ts` syntax for importing convex files.
-- This includes importing generated files like `@/convex/_generated/server`, `@/convex/_generated/api`
-- Remember to import functions like useQuery, useMutation, useAction, etc. from `convex/react`
-- NEVER have return type validators.
+- `src/` — React app, routes, components, state and services
+- `src/convex/` — Convex schema and owner-scoped backend functions
+- `src/convex/_generated/` — generated Convex bindings (regenerate; do not hand-edit)
+- `src/data/` — synthetic scenario and demo data
+- `src/pages/` — investigator and consumer routes
+- `src/components/` — shared UI and investigation components

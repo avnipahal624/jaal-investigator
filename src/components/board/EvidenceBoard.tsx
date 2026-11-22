@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { useJaal } from "@/state/JaalProvider";
 import type {
   EvidenceGraph,
-  GraphEdge,
   GraphEvidenceData,
   GraphIndicatorData,
   GraphMessageData,

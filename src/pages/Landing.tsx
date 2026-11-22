@@ -2,79 +2,73 @@ import { useJaal } from "@/state/JaalProvider";
 import { useAuth } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
 import {
-  Activity,
   ArrowRight,
+  AudioLines,
   BadgeCheck,
-  Bot,
-  Braces,
+  BookOpenCheck,
+  CheckCheck,
+  ClipboardList,
+  Clock3,
+  FileSearch,
+  FileText,
   Fingerprint,
   GitBranch,
   LockKeyhole,
-  Network,
-  Radar,
+  MessageSquareText,
   ShieldCheck,
-  ShieldHalf,
   Sparkles,
   Waypoints,
-  Workflow,
 } from "lucide-react";
 import { Link } from "react-router";
 
-const AGENTS = [
+const CAPABILITIES = [
   {
-    icon: GitBranch,
-    name: "Change Sentinel",
-    body: "Diffs a deployment, finds changed endpoints and scopes the investigation to what actually moved.",
+    icon: MessageSquareText,
+    title: "Read the conversation",
+    body: "Keep suspicious messages together, advance a labeled synthetic scammer conversation, and see the kill-chain stage as pressure builds.",
   },
   {
-    icon: Radar,
-    name: "Recon & Inventory",
-    body: "Crawls authorized workflows with synthetic roles and classifies active, zombie and shadow APIs.",
+    icon: Waypoints,
+    title: "Connect the evidence",
+    body: "Follow source messages, extracted links, phone numbers and payment identifiers on a board that explains why each relationship exists.",
   },
   {
-    icon: Workflow,
-    name: "Attack Planner",
-    body: "Selects business-logic tests from endpoint purpose, role context and historical findings.",
+    icon: AudioLines,
+    title: "Review the recording",
+    body: "Attach a call recording to a case, inspect the timestamped transcript and accept, correct or dismiss proposed findings.",
   },
   {
-    icon: ShieldCheck,
-    name: "Safe Execution",
-    body: "Enforces exact scope, budgets and approvals. No LLM can add a host or bypass the gate.",
+    icon: Clock3,
+    title: "Reconstruct the timeline",
+    body: "Separate when an event happened from when JAAL learned about it. Unknown times stay unknown instead of becoming invented facts.",
   },
   {
-    icon: Fingerprint,
-    name: "Verification",
-    body: "Replays a control and an attack assertion. A generic 200 is never treated as proof.",
+    icon: ClipboardList,
+    title: "Decide what to do now",
+    body: "Get case-specific next steps based on what was actually requested, answered or already shared — then mark progress yourself.",
   },
   {
-    icon: Braces,
-    name: "Triage & Reporting",
-    body: "Separates technical severity from travel-business impact and seals sanitized evidence.",
-  },
-  {
-    icon: Activity,
-    name: "Retest",
-    body: "Replays the original test against the fixed configuration and preserves every historical artifact.",
+    icon: FileText,
+    title: "Export a reviewed report",
+    body: "Edit the narrative, exclude weak or sensitive material, keep source references, and export a report that reads outside the console.",
   },
 ];
 
-const LOOP = [
-  ["01", "Detect", "Deployment diff"],
-  ["02", "Discover", "Role-aware probe"],
-  ["03", "Understand", "API graph"],
-  ["04", "Plan", "Deterministic tests"],
-  ["05", "Execute", "Approved scope"],
-  ["06", "Verify", "Control + attack"],
-  ["07", "Report", "SHA-256 evidence"],
-  ["08", "Retest", "Fixed replay"],
+const WORKFLOW = [
+  ["01", "Capture", "Message, recording, or synthetic scenario"],
+  ["02", "Interpret", "Tactics, indicators and uncertainty"],
+  ["03", "Review", "A person accepts or rejects each finding"],
+  ["04", "Connect", "Evidence board and chronological timeline"],
+  ["05", "Act", "Case-specific safety and verification steps"],
+  ["06", "Report", "Reviewed narrative, sources and exclusions"],
 ];
 
 export default function Landing() {
   const { state } = useJaal();
   const { isAuthenticated } = useAuth();
   const signedIn = Boolean(state.user) || isAuthenticated;
-  const securityHref = signedIn ? "/security" : "/login?returnTo=%2Fsecurity";
-  const consoleHref = signedIn ? "/dashboard" : "/login?returnTo=%2Fdashboard";
+  const dashboardHref = signedIn ? "/dashboard" : "/login?returnTo=%2Fdashboard";
+  const newCaseHref = signedIn ? "/investigations/new" : "/login?returnTo=%2Finvestigations%2Fnew";
 
   return (
     <div className="metal-page relative min-h-screen overflow-hidden text-[#F3F8FF]">
@@ -88,24 +82,24 @@ export default function Landing() {
             <div>
               <p className="text-[13px] font-bold leading-none tracking-[0.24em]">JAAL</p>
               <p className="mt-1 font-mono text-[7px] uppercase tracking-[0.18em] text-[#6F89A6]">
-                Agentic security
+                Scam investigation
               </p>
             </div>
           </Link>
           <nav className="hidden items-center gap-6 font-mono text-[9px] uppercase tracking-[0.12em] text-[#8DA6C2] md:flex">
-            <a href="#loop" className="transition-colors hover:text-[#6FD7FF]">Loop</a>
-            <a href="#agents" className="transition-colors hover:text-[#6FD7FF]">Agents</a>
-            <a href="#safety" className="transition-colors hover:text-[#6FD7FF]">Safety</a>
-            <Link to={consoleHref} className="transition-colors hover:text-[#6FD7FF]">
-              Forensic console
+            <a href="#workflow" className="transition-colors hover:text-[#6FD7FF]">Workflow</a>
+            <a href="#capabilities" className="transition-colors hover:text-[#6FD7FF]">Capabilities</a>
+            <a href="#trust" className="transition-colors hover:text-[#6FD7FF]">Evidence rules</a>
+            <Link to={dashboardHref} className="transition-colors hover:text-[#6FD7FF]">
+              Console
             </Link>
           </nav>
           <div className="flex items-center gap-2">
             <Link
-              to={securityHref}
+              to={dashboardHref}
               className="metal-button-ghost inline-flex h-8 items-center gap-1.5 rounded-sm px-3 font-mono text-[9px] uppercase tracking-[0.12em]"
             >
-              <ShieldHalf className="size-3" /> Security console
+              <FileSearch className="size-3" /> Open console
             </Link>
           </div>
         </div>
@@ -115,47 +109,46 @@ export default function Landing() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(54,137,255,0.18),transparent_40%),radial-gradient(circle_at_88%_16%,rgba(111,215,255,0.12),transparent_34%)]" />
         <div className="metal-floor opacity-60" />
         <div className="metal-orb pointer-events-none absolute right-[7%] top-[20%] hidden size-28 opacity-70 lg:block" />
-        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 pb-16 pt-14 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:pt-20">
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 pb-16 pt-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pt-20">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
           >
             <span className="metal-chip inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[8px] uppercase tracking-[0.18em]">
-              <Sparkles className="size-3" /> TBO Security Hackathon 2026 · synthetic lab
+              <Sparkles className="size-3" /> Voice-first scam investigation
             </span>
             <h1 className="mt-6 max-w-3xl text-4xl font-semibold leading-[1.03] tracking-[-0.035em] sm:text-5xl lg:text-[62px]">
-              Every deploy.
+              Turn a suspicious
               <br />
-              Every endpoint.
+              conversation into
               <br />
-              <span className="metal-text">Every vulnerability investigated.</span>
+              <span className="metal-text">a case you can explain.</span>
             </h1>
             <p className="mt-5 max-w-xl text-[14px] leading-relaxed text-[#A9BFD6]">
-              JAAL is an autonomous DAST engine for B2B travel. It detects release
-              changes, discovers undocumented APIs, understands agency boundaries,
-              plans targeted business-logic tests, executes them safely, verifies the
-              violation, and keeps retesting until the fix holds.
+              JAAL brings messages, recorded calls, extracted indicators, tactic findings,
+              evidence links and safe next steps into one investigated case. Every claim
+              keeps its source. Every finding keeps its review state.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-2.5">
               <Link
-                to={securityHref}
+                to={newCaseHref}
                 className="metal-button inline-flex h-10 items-center gap-2 rounded-sm px-5 text-[11px] font-semibold"
               >
-                Open security operations <ArrowRight className="size-4" />
+                Start an investigation <ArrowRight className="size-4" />
               </Link>
               <Link
-                to={consoleHref}
+                to={dashboardHref}
                 className="metal-button-ghost inline-flex h-10 items-center gap-2 rounded-sm px-4 font-mono text-[9px] uppercase tracking-[0.12em]"
               >
-                <BadgeCheck className="size-3.5" /> Forensic JAAL
+                <BadgeCheck className="size-3.5" /> Open case console
               </Link>
             </div>
             <div className="mt-8 grid max-w-xl grid-cols-3 gap-2">
               {[
-                ["7", "specialized agents"],
-                ["6", "logic attack modules"],
-                ["0", "external targets"],
+                ["5", "scenario arcs"],
+                ["3", "evidence views"],
+                ["100%", "source-linked"],
               ].map(([value, label]) => (
                 <div key={label} className="metal-card rounded-sm px-3 py-2.5">
                   <p className="metal-text text-xl font-semibold">{value}</p>
@@ -177,111 +170,109 @@ export default function Landing() {
               <div className="flex items-center gap-2">
                 <span className="size-1.5 rounded-full bg-[#35C98A]" />
                 <span className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#8DA6C2]">
-                  JAAL / DEPLOYMENT INVESTIGATION
+                  JAAL / CASE WORKSPACE
                 </span>
               </div>
-              <span className="font-mono text-[7px] uppercase tracking-[0.12em] text-[#6EA8FF]">
-                synthetic
+              <span className="font-mono text-[7px] uppercase tracking-[0.12em] text-[#F5C96A]">
+                simulation
               </span>
             </div>
             <div className="border-b border-[#153454] bg-[#0d1725] px-3 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="flex size-6 items-center justify-center border border-[#8BD7FF]/35 bg-[#8BD7FF]/8">
-                    <GitBranch className="size-3 text-[#8BD7FF]" />
-                  </span>
-                  <div>
-                    <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E96B5]">
-                      deployment detected
-                    </p>
-                    <p className="font-mono text-[10px] text-[#DCEBF8]">travel-platform-2026.11.1</p>
-                  </div>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#7E96B5]">
+                    JAAL-104 · fake parcel
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#DCEBF8]">
+                    Delivery fee demanded for a held parcel
+                  </p>
                 </div>
                 <span className="border border-[#F59E55]/35 bg-[#F59E55]/8 px-1.5 py-0.5 font-mono text-[7px] uppercase text-[#F59E55]">
-                  4 changes
+                  payment stage
                 </span>
               </div>
-              <div className="mt-3 grid gap-1">
-                {[
-                  ["MODIFIED", "GET /api/bookings/:id", "#6FD7FF"],
-                  ["ADDED", "GET /api/internal/agency-metrics", "#6EA8FF"],
-                  ["MODIFIED", "POST /api/refunds", "#6FD7FF"],
-                  ["DEPRECATED", "GET /api/legacy/bookings/:id", "#F59E55"],
-                ].map(([type, path, color]) => (
-                  <div
-                    key={path}
-                    className="flex items-center gap-2 border border-[#153454] bg-[#071426] px-2 py-1"
-                  >
-                    <span className="size-1" style={{ backgroundColor: color }} />
-                    <span className="w-16 font-mono text-[6px] uppercase tracking-[0.08em]" style={{ color }}>
-                      {type}
-                    </span>
-                    <span className="truncate font-mono text-[8px] text-[#A9BFD6]">{path}</span>
-                  </div>
-                ))}
+              <div className="mt-3 space-y-1.5">
+                <div className="max-w-[92%] border border-[#F5C96A]/25 bg-[#F5C96A]/5 px-2.5 py-2">
+                  <p className="font-mono text-[6px] uppercase tracking-[0.1em] text-[#7E96B5]">
+                    synthetic scammer · message 03
+                  </p>
+                  <p className="mt-1 text-[9px] leading-relaxed text-[#DCEBF8]">
+                    Pay the ₹499 release fee in the next 15 minutes or the parcel is returned.
+                  </p>
+                </div>
+                <div className="ml-auto max-w-[88%] border border-[#6FD7FF]/30 bg-[#6FD7FF]/[0.06] px-2.5 py-2">
+                  <p className="font-mono text-[6px] uppercase tracking-[0.1em] text-[#7E96B5]">
+                    JAAL decoy · reviewable
+                  </p>
+                  <p className="mt-1 text-[9px] leading-relaxed text-[#DCEBF8]">
+                    Which delivery company are you with, and what is the tracking reference?
+                  </p>
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-3 divide-x divide-[#153454] border-b border-[#153454]">
               {[
-                ["CHANGE", "complete", "#35C98A"],
-                ["DISCOVERY", "12 probed", "#35C98A"],
-                ["SAFETY", "approval required", "#F5C96A"],
+                ["TACTIC", "urgency", "#F5C96A"],
+                ["INDICATOR", "payment link", "#6FD7FF"],
+                ["SOURCE", "message #03", "#6FD7FF"],
               ].map(([label, value, color]) => (
                 <div key={label} className="px-2.5 py-2">
                   <p className="font-mono text-[6px] uppercase tracking-[0.12em] text-[#4f667d]">
                     {label}
                   </p>
-                  <p className="mt-0.5 text-[8px]" style={{ color }}>
-                    {value}
-                  </p>
+                  <p className="mt-0.5 text-[8px]" style={{ color }}>{value}</p>
                 </div>
               ))}
             </div>
             <div className="px-3 py-3">
               <div className="flex items-center gap-2">
-                <LockKeyhole className="size-3 text-[#F5C96A]" />
-                <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#F5C96A]">
-                  Human approval gate
+                <ClipboardList className="size-3 text-[#6FD7FF]" />
+                <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#6FD7FF]">
+                  What should I do now?
                 </p>
               </div>
-              <p className="mt-1.5 text-[9px] leading-relaxed text-[#8DA6C2]">
-                Discovery is read-only. Active tests stay queued until an operator
-                approves the six scoped plans.
-              </p>
-              <div className="mt-3 flex items-center gap-2">
-                <span className="inline-flex h-6 items-center gap-1 bg-[#6FD7FF] px-2 font-mono text-[7px] uppercase tracking-[0.08em] text-[#041413]">
-                  <ShieldCheck className="size-2.5" /> approve & execute
-                </span>
-                <span className="font-mono text-[7px] uppercase tracking-[0.08em] text-[#6F89A6]">
-                  60 request ceiling
-                </span>
+              <div className="mt-2 flex items-start gap-2 border border-[#153454] bg-[#071426] px-2.5 py-2">
+                <CheckCheck className="mt-0.5 size-3 shrink-0 text-[#35C98A]" />
+                <div>
+                  <p className="text-[9px] font-medium text-[#DCEBF8]">Verify the delivery independently</p>
+                  <p className="mt-0.5 text-[8px] leading-relaxed text-[#8DA6C2]">
+                    Do not use the link in the message. Open the courier’s own site or app.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {["SHA-256 preserved", "reviewed finding", "source linked"].map((label) => (
+                  <span key={label} className="border border-[#1B4368] bg-[#071426] px-1.5 py-0.5 font-mono text-[6px] uppercase tracking-[0.08em] text-[#8DA6C2]">
+                    {label}
+                  </span>
+                ))}
               </div>
             </div>
             <div className="absolute -bottom-3 -right-3 hidden border border-[#35C98A]/30 bg-[#071426] px-2 py-1 font-mono text-[7px] uppercase tracking-[0.1em] text-[#35C98A] sm:block">
-              exact scope: lab.jaal.internal
+              original evidence untouched
             </div>
           </motion.div>
         </div>
       </section>
 
-      <section id="loop" className="border-y border-[#153454] bg-[#071426]/80">
+      <section id="workflow" className="border-y border-[#153454] bg-[#071426]/80">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="font-mono text-[8px] uppercase tracking-[0.22em] text-[#6FD7FF]">
-                The complete operational loop
+                One case, one evidence trail
               </p>
               <h2 className="mt-1.5 text-2xl font-semibold tracking-[-0.02em]">
-                One release, continuously investigated
+                From first contact to reviewed report
               </h2>
             </div>
             <p className="max-w-md text-[11px] leading-relaxed text-[#8DA6C2]">
-              Every stage has persisted inputs, outputs, execution status, error
-              handling and audit records. Nothing is an in-memory illusion.
+              The conversation, recording, board and timeline are views of the same case
+              records. Review decisions persist; original evidence is never rewritten.
             </p>
           </div>
-          <div className="mt-6 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-8">
-            {LOOP.map(([number, title, detail]) => (
+          <div className="mt-6 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+            {WORKFLOW.map(([number, title, detail]) => (
               <div key={number} className="metal-card metal-shine group rounded-sm px-2.5 py-3">
                 <p className="font-mono text-[8px] text-[#6FD7FF]">{number}</p>
                 <p className="mt-2 text-[11px] font-medium text-[#DCEBF8]">{title}</p>
@@ -294,69 +285,58 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="agents" className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6">
+      <section id="capabilities" className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6">
         <div className="max-w-2xl">
           <p className="font-mono text-[8px] uppercase tracking-[0.22em] text-[#6FD7FF]">
-            Seven agents · one orchestrator
+            Investigation, not a black box
           </p>
           <h2 className="mt-1.5 text-3xl font-semibold tracking-[-0.03em]">
-            Specialized work, bounded autonomy.
+            A workspace built around the evidence.
           </h2>
           <p className="mt-2 text-[12px] leading-relaxed text-[#A9BFD6]">
-            The planner reasons about business context, but execution is deterministic.
-            Every active request is scope-checked, budgeted and approval-gated.
+            JAAL helps collect what happened, show what supports each finding, and keep
+            the investigator in control of what becomes a reviewed conclusion.
           </p>
         </div>
-        <div className="mt-7 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          {AGENTS.map((agent, index) => (
-            <div
-              key={agent.name}
-              className="metal-card metal-shine group rounded-sm p-4"
-            >
+        <div className="mt-7 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {CAPABILITIES.map((capability, index) => (
+            <div key={capability.title} className="metal-card metal-shine group rounded-sm p-4">
               <div className="flex items-center justify-between">
                 <span className="flex size-7 items-center justify-center border border-[#1B4368] bg-[#071426]">
-                  <agent.icon className="size-3.5 text-[#6FD7FF]" />
+                  <capability.icon className="size-3.5 text-[#6FD7FF]" />
                 </span>
                 <span className="font-mono text-[7px] uppercase tracking-[0.1em] text-[#3f566d]">
                   {String(index + 1).padStart(2, "0")}
                 </span>
               </div>
-              <p className="mt-3 text-[11px] font-medium text-[#DCEBF8]">{agent.name}</p>
-              <p className="mt-1.5 text-[10px] leading-relaxed text-[#8DA6C2]">{agent.body}</p>
+              <p className="mt-3 text-[11px] font-medium text-[#DCEBF8]">{capability.title}</p>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-[#8DA6C2]">{capability.body}</p>
             </div>
           ))}
-          <div className="metal-card rounded-sm border-[#6FD7FF]/30 p-4">
-            <Bot className="size-4 text-[#6FD7FF]" />
-            <p className="mt-3 text-[11px] font-medium text-[#5de0d4]">Orchestrator</p>
-            <p className="mt-1.5 text-[10px] leading-relaxed text-[#8DA6C2]">
-              Durable jobs, idempotency keys, leases, bounded retries and a global
-              emergency stop.
-            </p>
-          </div>
         </div>
       </section>
 
-      <section id="safety" className="border-y border-[#153454] bg-[#071426]">
+      <section id="trust" className="border-y border-[#153454] bg-[#071426]">
         <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:items-center">
           <div>
             <p className="font-mono text-[8px] uppercase tracking-[0.22em] text-[#F5C96A]">
-              Safety is the product
+              Provenance is part of the product
             </p>
             <h2 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">
-              A security tool that cannot be talked into overreach.
+              Synthetic never pretends to be real.
             </h2>
             <p className="mt-3 max-w-xl text-[12px] leading-relaxed text-[#A9BFD6]">
-              JAAL's demonstration runs against an isolated synthetic travel lab. The
-              exact host, paths, methods, request budget and test credentials are
-              enforced server-side. Redirects are disabled, evidence is sanitized, and
-              a human must approve active execution.
+              JAAL has two clearly separated modes: evidence a user deliberately supplies,
+              and labeled simulations used for training and demonstration. Findings start
+              as proposed. A person reviews them. AI output is never presented as a
+              confirmed scam or verified fact.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               {([
-                ["Exact host allowlist", LockKeyhole],
-                ["Human approval", ShieldCheck],
-                ["Emergency stop", ShieldHalf],
-                ["SHA-256 evidence", Fingerprint],
+                ["Source-linked findings", Fingerprint],
+                ["Human review state", BadgeCheck],
+                ["Original evidence preserved", LockKeyhole],
+                ["No automatic reporting", ShieldCheck],
               ] as const).map(([label, Icon]) => (
                 <span
                   key={String(label)}
@@ -370,24 +350,24 @@ export default function Landing() {
           <div className="metal-surface rounded-md">
             <div className="border-b border-[#153454] px-4 py-3">
               <p className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#60788f]">
-                Authorized target
+                Evidence rules
               </p>
-              <p className="mt-1 font-mono text-[12px] text-[#6FD7FF]">
-                https://lab.jaal.internal
+              <p className="mt-1 text-[12px] text-[#6FD7FF]">
+                What the console will and will not claim
               </p>
             </div>
             <dl className="divide-y divide-[#162436] font-mono text-[9px]">
               {[
-                ["scheme", "HTTPS only"],
-                ["methods", "GET · POST"],
-                ["path scope", "/api/*"],
-                ["redirects", "blocked"],
-                ["approval", "required before execution"],
-                ["data", "synthetic travellers only"],
+                ["source content", "shown beside every finding"],
+                ["machine transcript", "never silently rewritten"],
+                ["corrections", "stored separately, timestamped"],
+                ["voice confidence", "uncertainty shown, not hidden"],
+                ["simulation", "labeled in conversation and report"],
+                ["export", "manual, reviewed, exclusion-aware"],
               ].map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between px-4 py-2">
+                <div key={key} className="flex items-center justify-between gap-4 px-4 py-2">
                   <dt className="uppercase tracking-[0.08em] text-[#6F89A6]">{key}</dt>
-                  <dd className="text-[#c7d3e2]">{value}</dd>
+                  <dd className="text-right text-[#c7d3e2]">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -399,19 +379,19 @@ export default function Landing() {
         <div className="grid gap-3 lg:grid-cols-3">
           {[
             {
-              icon: Network,
-              title: "Discovery without OpenAPI",
-              body: "Role-aware probing and traffic observation build the inventory. Shadow and zombie classifications require evidence windows, not one missed crawl.",
+              icon: GitBranch,
+              title: "Five coherent scenarios",
+              body: "Digital arrest, fake recruiter, held parcel, account takeover/OTP and blackmail — each with a staged arc, not a single seed message.",
+            },
+            {
+              icon: BookOpenCheck,
+              title: "Voice-first review",
+              body: "Upload a call you already have. Inspect the timestamped transcript, seek the audio, and review each proposed finding against its moment.",
             },
             {
               icon: Waypoints,
-              title: "Business-logic depth",
-              body: "Cross-agency booking access, credit escalation, fare tampering, refund replay, deprecated readers and undocumented metrics.",
-            },
-            {
-              icon: Fingerprint,
-              title: "Precision over noise",
-              body: "A candidate only becomes verified when its control passes and the attack response demonstrably crosses the boundary. Evidence is replayable.",
+              title: "One shared interpretation",
+              body: "The board and timeline read the same persisted evidence. No separate manually maintained story that drifts from the case.",
             },
           ].map((item) => (
             <div key={item.title} className="metal-card metal-shine rounded-sm p-5">
@@ -427,28 +407,28 @@ export default function Landing() {
         <div className="mx-auto flex w-full max-w-7xl flex-col items-start justify-between gap-5 px-4 py-10 sm:px-6 lg:flex-row lg:items-center">
           <div>
             <p className="font-mono text-[8px] uppercase tracking-[0.2em] text-[#6FD7FF]">
-              Detect → Discover → Understand → Plan → Execute → Verify → Report → Retest
+              Capture → Interpret → Review → Connect → Act → Report
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.02em]">
-              Run the synthetic travel investigation.
+              Open the case workspace.
             </h2>
             <p className="mt-1.5 max-w-xl text-[11px] leading-relaxed text-[#8DA6C2]">
-              Real backend events, real control assertions, real SHA-256 evidence and a
-              human approval gate. The lab is clearly labelled synthetic.
+              Create a synthetic case, attach a recording you own, or continue an existing
+              investigation. Simulation is labeled. Nothing is sent anywhere automatically.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              to={securityHref}
+              to={newCaseHref}
               className="metal-button inline-flex h-10 items-center gap-2 rounded-sm px-5 text-[11px] font-semibold"
             >
-              Open security operations <ArrowRight className="size-4" />
+              New investigation <ArrowRight className="size-4" />
             </Link>
             <Link
-              to={consoleHref}
+              to={dashboardHref}
               className="metal-button-ghost inline-flex h-10 items-center gap-2 rounded-sm px-4 font-mono text-[9px] uppercase tracking-[0.12em]"
             >
-              Forensic console
+              Case console
             </Link>
           </div>
         </div>
@@ -456,8 +436,8 @@ export default function Landing() {
 
       <footer className="border-t border-[#162436] px-4 py-5 sm:px-6">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-1 font-mono text-[7px] uppercase tracking-[0.14em] text-[#5E7896] sm:flex-row sm:items-center sm:justify-between">
-          <span>JAAL · every deploy, every endpoint, every vulnerability investigated</span>
-          <span>Synthetic lab · no external scanning · no real traveller data</span>
+          <span>JAAL · every message is a clue</span>
+          <span>Scam investigation · synthetic simulations labeled · no automatic reports</span>
         </div>
       </footer>
     </div>
