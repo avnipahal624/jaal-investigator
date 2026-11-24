@@ -4,6 +4,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { sha256HexBytes } from "@/utils/hash";
+import { getScenario } from "@/data/scenarios";
 import {
   AlertTriangle,
   AudioLines,
@@ -82,9 +83,11 @@ const TRANSCRIPTION_LABEL: Record<string, string> = {
 
 export function CaseVoicePanel({
   caseId,
+  scenarioKey,
   focus,
 }: {
   caseId: string;
+  scenarioKey?: string;
   focus?: { recordingId: string; atMs?: number } | null;
 }) {
   const voice = useQuery(api.caseWorkspace.getCaseVoice, { caseId }) as VoiceRow[] | undefined;
@@ -127,7 +130,7 @@ export function CaseVoicePanel({
           ))
         )}
       </div>
-      <DecoyCallPanel caseId={caseId} />
+      <DecoyCallPanel caseId={caseId} scenarioKey={scenarioKey} />
     </div>
   );
 }
@@ -446,6 +449,29 @@ function CallCompanionCapture({ onCaptured }: { onCaptured: (file: File) => void
   );
 }
 
+function segmentForMs(segments: Segment[], ms?: number) {
+  if (typeof ms !== "number") return null;
+  const index = segments.findIndex(
+    (segment) =>
+      typeof segment.startMs === "number" &&
+      typeof segment.endMs === "number" &&
+      ms >= segment.startMs &&
+      ms <= segment.endMs,
+  );
+  return index >= 0 ? { index, segment: segments[index]! } : null;
+}
+
+function companionSuggestion(finding: Finding): string {
+  if (finding.recommendedAction?.trim()) return finding.recommendedAction.trim();
+  const text = `${finding.tactic} ${finding.explanation}`.toLowerCase();
+  if (/code|otp|password|pin/.test(text)) return "Do not share the code. Contact the organisation using a number you find yourself.";
+  if (/payment|money|fee|transfer|deposit/.test(text)) return "Pause before paying. Verify the organisation independently first.";
+  if (/link|url|website|portal/.test(text)) return "Do not open that link. Use the official app or website you find yourself.";
+  if (/authority|police|bank|government|company/.test(text)) return "Verify the claimed organisation using an independent contact route.";
+  if (/threat|fear|urgent|deadline|pressure/.test(text)) return "Pause. A deadline is being used to pressure you into acting.";
+  return "Review the quoted moment before deciding what to do next.";
+}
+
 function RecordingCard({
   recording,
   focus,
@@ -574,20 +600,42 @@ function RecordingCard({
               </div>
               <div className="mt-2 max-h-72 space-y-1.5 overflow-y-auto pr-1">
                 {segments.length > 0 ? (
-                  segments.map((segment, index) => (
-                    <button
-                      key={`${segment.startMs}-${index}`}
-                      type="button"
-                      onClick={() => seek(segment.startMs)}
-                      className="flex w-full gap-2 border border-transparent px-2 py-1.5 text-left text-[11px] leading-relaxed transition-colors hover:border-jcyan/30 hover:bg-jcyan/5"
-                    >
-                      <span className="shrink-0 font-mono text-[10px] text-jcyan">{fmtTime(segment.startMs)}</span>
-                      <span className="text-jtext">
-                        {segment.speaker && <strong className="text-jcyan">{segment.speaker}: </strong>}
-                        {segment.text}
-                      </span>
-                    </button>
-                  ))
+                  segments.map((segment, index) => {
+                    const segmentCorrection = corrections.find((item) => item.segmentIndex === index);
+                    return (
+                      <div key={`${segment.startMs}-${index}`} className="border border-transparent transition-colors hover:border-jcyan/30 hover:bg-jcyan/5">
+                        <button
+                          type="button"
+                          onClick={() => seek(segment.startMs)}
+                          className="flex w-full gap-2 px-2 pb-1 pt-1.5 text-left text-[11px] leading-relaxed"
+                        >
+                          <span className="shrink-0 font-mono text-[10px] text-jcyan">{fmtTime(segment.startMs)}</span>
+                          <span className="text-jtext">
+                            {segment.speaker && <strong className="text-jcyan">{segment.speaker}: </strong>}
+                            {segment.text}
+                          </span>
+                        </button>
+                        <div className="flex items-center gap-2 px-2 pb-1.5 pl-12">
+                          <span className="font-mono text-[8px] uppercase tracking-wider text-jmuted/60">
+                            segment {index + 1} · {fmtTime(segment.startMs)}–{fmtTime(segment.endMs)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCorrection({ index, text: segment.text })}
+                            className="font-mono text-[8px] uppercase tracking-wider text-jcyan/80 hover:text-jcyan"
+                          >
+                            correct
+                          </button>
+                        </div>
+                        {segmentCorrection && (
+                          <p className="mx-2 mb-1.5 border-l border-jamber/40 pl-2 text-[10px] text-jmuted">
+                            Investigator correction: <span className="text-jtext">{segmentCorrection.corrected}</span>{" "}
+                            <span className="text-jmuted/60">(machine original retained)</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-jtext">{recording.transcript}</p>
                 )}
@@ -623,6 +671,7 @@ function RecordingCard({
                 ) : (
                   findings.map((finding) => {
                     const verdict = reviews[finding.id]?.verdict;
+                    const source = segmentForMs(segments, finding.timestampMs);
                     return (
                       <div
                         key={finding.id}
@@ -651,7 +700,11 @@ function RecordingCard({
                           )}
                           {typeof finding.timestampMs === "number" && (
                             <p className="mt-1 font-mono text-[9px] text-jcyan">
-                              {fmtTime(finding.timestampMs)} · open in audio
+                              {fmtTime(finding.timestampMs)} ·{" "}
+                              {source
+                                ? `segment ${source.index + 1} · ${fmtTime(source.segment.startMs)}–${fmtTime(source.segment.endMs)}`
+                                : "timestamp only"}{" "}
+                              · open in audio
                             </p>
                           )}
                         </button>
@@ -665,6 +718,36 @@ function RecordingCard({
                   })
                 )}
               </div>
+              {findings.filter((finding) => reviews[finding.id]?.verdict !== "rejected").length > 0 && (
+                <div className="mt-3 border border-jcyan/25 bg-jcyan/[0.04] p-2.5">
+                  <p className="jaal-label !text-jcyan">Call Companion · post-recording suggestions</p>
+                  <p className="mt-1 text-[9px] leading-relaxed text-jmuted">
+                    Generated only from the processed transcript. Analysis happens after recording; these are not live captions.
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {findings
+                      .filter((finding) => reviews[finding.id]?.verdict !== "rejected")
+                      .slice(0, 4)
+                      .map((finding) => {
+                        const source = segmentForMs(segments, finding.timestampMs);
+                        return (
+                          <button
+                            key={`suggestion-${finding.id}`}
+                            type="button"
+                            onClick={() => seek(finding.timestampMs)}
+                            className="block w-full border-l-2 border-jcyan/50 pl-2 text-left hover:border-jcyan"
+                          >
+                            <span className="block text-[10px] leading-relaxed text-jtext">{companionSuggestion(finding)}</span>
+                            <span className="mt-0.5 block font-mono text-[8px] uppercase tracking-wider text-jmuted">
+                              triggered by “{finding.excerpt || finding.tactic}” · {fmtTime(finding.timestampMs)}
+                              {source ? ` · segment ${source.index + 1}` : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
               {recording.analysis.indicators && recording.analysis.indicators.length > 0 && (
                 <div className="mt-3">
                   <p className="jaal-label">Possible indicators</p>
@@ -738,7 +821,19 @@ function ReviewButton({ active, onClick, label }: { active: boolean; onClick: ()
   );
 }
 
-function DecoyCallPanel({ caseId }: { caseId: string }) {
+type DecoyTurn = {
+  id: string;
+  speaker: "jaal" | "scammer";
+  text: string;
+  at: number;
+  stage?: string;
+  reason?: string;
+  claim?: string;
+  tactics?: string[];
+  indicators?: string[];
+};
+
+function DecoyCallPanel({ caseId, scenarioKey }: { caseId: string; scenarioKey?: string }) {
   const calls = useQuery(api.caseWorkspace.getCaseCalls, { caseId }) as
     | Array<{
         _id: Id<"call_sessions">;
@@ -747,9 +842,10 @@ function DecoyCallPanel({ caseId }: { caseId: string }) {
         engine: string;
         maxTurns: number;
         currentTurn: number;
-        turns: Array<{ id: string; speaker: "jaal" | "scammer"; text: string; at: number; stage?: string; reason?: string }>;
+        turns: DecoyTurn[];
         syncedAt?: number;
         createdAt: number;
+        endedAt?: number;
       }>
     | undefined;
   const create = useMutation(api.caseWorkspace.createDecoyCall);
@@ -759,7 +855,16 @@ function DecoyCallPanel({ caseId }: { caseId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [synced, setSynced] = useState(false);
+  const [maxTurns, setMaxTurns] = useState(5);
   const session = calls?.[0] ?? null;
+  const scenario = getScenario(session?.scenarioKey ?? scenarioKey);
+  const scammerTurns = (session?.turns ?? []).filter((turn) => turn.speaker === "scammer");
+  const tactics = [...new Set(scammerTurns.flatMap((turn) => turn.tactics ?? []))];
+  const indicators = [...new Set(scammerTurns.flatMap((turn) => turn.indicators ?? []))];
+  const claims = [...new Set(scammerTurns.map((turn) => turn.claim).filter((claim): claim is string => Boolean(claim)))];
+  const elapsedMs = session && session.turns.length > 0
+    ? Math.max(session.turns[session.turns.length - 1]!.at - session.createdAt, 0)
+    : 0;
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -791,16 +896,44 @@ function DecoyCallPanel({ caseId }: { caseId: string }) {
 
       <div className="p-4">
         {!session ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-[11px] text-jmuted">Start a bounded call to collect claims and identifiers for review.</p>
-            <button
-              type="button"
-              onClick={() => void run(() => create({ caseId, maxTurns: 5 }))}
-              disabled={busy}
-              className="metal-button inline-flex items-center gap-2 rounded-sm px-4 py-2 text-[11px] font-semibold disabled:opacity-50"
-            >
-              <Play className="size-3.5" /> Start simulated call
-            </button>
+          <div className="space-y-3">
+            <div className="grid gap-2 text-[11px] leading-relaxed text-jmuted md:grid-cols-[1fr_auto] md:items-end">
+              <div className="border border-jborder/60 bg-jsurface/40 p-3">
+                <p className="font-mono text-[8px] uppercase tracking-wider text-jamber">Scenario chosen</p>
+                <p className="mt-1 text-[12px] font-medium text-jtext">
+                  {scenario?.title ?? "Digital arrest simulation"}
+                </p>
+                <p className="mt-1 text-[10px]">
+                  <span className="text-jcyan">Objective:</span>{" "}
+                  {scenario?.decoyObjective ?? "Establish the claimed identity, payment destination and deadline."}
+                </p>
+              </div>
+              <label className="border border-jborder/60 bg-jsurface/40 p-3 text-[9px] font-mono uppercase tracking-wider text-jmuted">
+                Maximum turns
+                <select
+                  value={maxTurns}
+                  onChange={(event) => setMaxTurns(Number(event.target.value))}
+                  className="mt-1 block w-full border border-jborder/70 bg-jsurface px-2 py-1 text-[10px] text-jtext outline-none"
+                >
+                  {[3, 4, 5, 6, 8].map((value) => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void run(() => create({ caseId, maxTurns }))}
+                disabled={busy}
+                className="metal-button inline-flex items-center gap-2 rounded-sm px-4 py-2 text-[11px] font-semibold disabled:opacity-50"
+              >
+                <Play className="size-3.5" /> Start simulated call
+              </button>
+              <p className="text-[10px] text-jmuted">
+                You control every turn. Pausing stops progression; ending generates no extra turns.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -809,7 +942,7 @@ function DecoyCallPanel({ caseId }: { caseId: string }) {
                 {session.status}
               </span>
               <span className="font-mono text-[9px] uppercase tracking-wider text-jmuted">
-                {session.engine} · turn {session.currentTurn}/{session.maxTurns} · {session.scenarioKey ?? "scenario"}
+                {session.engine} · turn {session.currentTurn}/{session.maxTurns} · elapsed {fmtTime(elapsedMs)} · {session.scenarioKey ?? "scenario"}
               </span>
               {session.status === "running" && (
                 <>
@@ -847,14 +980,74 @@ function DecoyCallPanel({ caseId }: { caseId: string }) {
                   >
                     <p className="font-mono text-[8px] uppercase tracking-wider text-jmuted">
                       {turn.speaker === "jaal" ? "JAAL decoy" : "Synthetic scammer"}
-                      {turn.stage ? ` · ${turn.stage}` : ""}
+                      {turn.stage ? ` · ${turn.stage}` : ""} · {fmtTime(Math.max(0, turn.at - session.createdAt))}
                     </p>
                     <p className="mt-1 text-[11px] leading-relaxed text-jtext">{turn.text}</p>
                     {turn.reason && <p className="mt-1 text-[9px] text-jmuted">Why JAAL asked: {turn.reason}</p>}
+                    {turn.claim && <p className="mt-1 font-mono text-[8px] uppercase tracking-wider text-jamber">Claim: {turn.claim}</p>}
+                    {turn.tactics && turn.tactics.length > 0 && (
+                      <p className="mt-1 text-[9px] text-jmuted">Automated tactic label: {turn.tactics.join(", ")}</p>
+                    )}
                   </div>
                 ))
               )}
             </div>
+
+            <div className="grid gap-2 md:grid-cols-2">
+              <div className="border border-jamber/30 bg-jamber/[0.04] p-2.5">
+                <p className="jaal-label !text-jamber">Tactics detected so far</p>
+                {tactics.length === 0 ? (
+                  <p className="mt-1 text-[10px] text-jmuted">No call turn has been processed yet.</p>
+                ) : (
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[10px] text-jtext">
+                    {tactics.map((tactic) => <li key={tactic}>{tactic}</li>)}
+                  </ul>
+                )}
+              </div>
+              <div className="border border-jcyan/25 bg-jcyan/[0.04] p-2.5">
+                <p className="jaal-label !text-jcyan">Extracted indicators · pending review</p>
+                {indicators.length === 0 ? (
+                  <p className="mt-1 text-[10px] text-jmuted">No links, payment handles or code requests extracted yet.</p>
+                ) : (
+                  <ul className="mt-1 space-y-0.5 text-[10px] text-jtext">
+                    {indicators.map((indicator) => <li key={indicator} className="font-mono">{indicator}</li>)}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {session.status === "ended" && (
+              <div className="border border-jborder/60 bg-jsurface/40 p-3">
+                <p className="jaal-label !text-jcyan">Post-call simulation review</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-jmuted">
+                  {scammerTurns.length} synthetic scammer turn{scammerTurns.length === 1 ? "" : "s"} processed over{" "}
+                  {fmtTime(elapsedMs)} of simulated time. No real call occurred.
+                </p>
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="font-mono text-[8px] uppercase tracking-wider text-jmuted">Claimed identities / claims</p>
+                    {claims.length === 0 ? (
+                      <p className="mt-1 text-[10px] text-jmuted">No specific identity claim was recorded.</p>
+                    ) : (
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[10px] text-jtext">
+                        {claims.map((claim) => <li key={claim}>{claim}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-mono text-[8px] uppercase tracking-wider text-jmuted">Unanswered / unverified questions</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[10px] text-jtext">
+                      {!indicators.some((item) => /^URL:/i.test(item)) && <li>No independently checkable website was established.</li>}
+                      {!indicators.some((item) => /email|upi|payment/i.test(item)) && <li>No payment destination was established.</li>}
+                      <li>The claimed organisation was not independently verified during the simulation.</li>
+                    </ul>
+                  </div>
+                </div>
+                <p className="mt-2 text-[10px] text-jmuted">
+                  Review the source-linked turns above, then add them to the case to continue review in the timeline and evidence board.
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <button

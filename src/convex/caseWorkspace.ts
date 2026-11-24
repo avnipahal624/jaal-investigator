@@ -33,6 +33,11 @@ function provenanceOf(inv: Doc<"investigations">): "USER_PROVIDED" | "SIMULATION
   return inv.source === "simulation" ? "SIMULATION" : "USER_PROVIDED";
 }
 
+function formatAudioTime(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
 // ---------------------------------------------------------------------------
 // Voice recordings attached directly to a case
 // ---------------------------------------------------------------------------
@@ -619,7 +624,39 @@ export const getCaseTimeline = query({
         reviewStatus: r.analysis.status,
         sourceId: r._id as string,
         messageId: null,
+        recordingId: r._id as string,
+        audioAtMs: 0,
       });
+
+      // Accepted audio findings are timeline events with their exact timestamp.
+      const reviews = (r.findingReviews as Record<string, { verdict?: string }> | null) ?? {};
+      const findings = (r.analysis.findings as Array<{
+        id?: string;
+        tactic?: string;
+        excerpt?: string;
+        explanation?: string;
+        timestampMs?: number;
+      }> | null) ?? [];
+      for (const finding of findings) {
+        if (!finding.id || reviews[finding.id]?.verdict !== "accepted") continue;
+        const at = typeof finding.timestampMs === "number" ? finding.timestampMs : null;
+        const atLabel = at === null ? "timestamp unavailable" : formatAudioTime(at);
+        rows.push({
+          id: `voice-finding:${r._id}:${finding.id}`,
+          kind: "finding" as const,
+          title: `Accepted audio finding · ${finding.tactic ?? "warning sign"}`,
+          detail: `${finding.excerpt || finding.explanation || "Reviewed by the investigator"} (${r.fileName} @ ${atLabel})`,
+          occurredAt: r.approximateCallAt ?? r.createdAt,
+          addedAt: r.updatedAt,
+          timeUnknown: r.approximateCallAt === undefined,
+          source: r.provenance === "SIMULATION" ? "SIMULATION" as const : "USER_PROVIDED" as const,
+          reviewStatus: "accepted",
+          sourceId: r._id as string,
+          messageId: null,
+          recordingId: r._id as string,
+          audioAtMs: at,
+        });
+      }
     }
 
     for (const event of events.filter((row) => row.owner === owner)) {
@@ -669,7 +706,30 @@ type CallTurn = {
   at: number;
   stage?: string;
   reason?: string;
+  claim?: string;
+  tactics?: string[];
+  indicators?: string[];
 };
+
+const STAGE_TACTIC: Record<string, string> = {
+  contact: "Initial contact / pretext",
+  authority: "Authority or organisation impersonation",
+  fear: "Fear, urgency or threat",
+  payment: "Payment or credential request",
+  exploit: "Instruction or link to an unsafe action",
+};
+
+/** Deterministic, reviewable indicator extraction from synthetic call text. */
+function callIndicators(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.match(/https?:\/\/[^\s,;]+/g) ?? []) found.add(`URL: ${match}`);
+  for (const match of text.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi) ?? []) found.add(`Email: ${match}`);
+  for (const match of text.match(/\+?\d[\d\s-]{7,}\d/g) ?? []) found.add(`Phone-like reference: ${match.trim()}`);
+  if (/\b(?:otp|one-time code|verification code|six-digit code)\b/i.test(text)) {
+    found.add("One-time code requested or referenced");
+  }
+  return [...found];
+}
 
 const JAAL_QUESTIONS = [
   "Which organisation are you calling from, and what is your reference or badge number?",
@@ -769,6 +829,9 @@ export const advanceDecoyCall = mutation({
       text: turn.text,
       at: now + 1200,
       stage: turn.stage,
+      claim: turn.claim,
+      tactics: turn.stage ? [STAGE_TACTIC[turn.stage] ?? turn.stage] : [],
+      indicators: callIndicators(turn.text),
     });
     const nextTurn = session.currentTurn + 1;
     const ended = nextTurn >= session.maxTurns || !scenarioTurn(session.scenarioKey, nextTurn);
@@ -824,6 +887,7 @@ export const getCaseReportDraft = query({
           reportData: report.reportData,
           simulated: report.simulated,
           draftNarrative: report.draftNarrative ?? null,
+          draftNote: report.draftNote ?? null,
           excludedEvidenceIds: report.excludedEvidenceIds ?? [],
           excludedTacticKeys: report.excludedTacticKeys ?? [],
           redactSensitive: report.redactSensitive ?? true,
@@ -838,6 +902,7 @@ export const updateCaseReportDraft = mutation({
     caseId: v.string(),
     reportId: v.string(),
     narrative: v.string(),
+    note: v.optional(v.string()),
     excludedEvidenceIds: v.array(v.string()),
     excludedTacticKeys: v.array(v.string()),
     redactSensitive: v.boolean(),
@@ -845,6 +910,7 @@ export const updateCaseReportDraft = mutation({
   handler: async (ctx, args) => {
     const { owner, inv } = await requireCase(ctx, args.caseId);
     if (args.narrative.length > 8_000) throw new Error("Report narrative is too long.");
+    if ((args.note ?? "").length > 4_000) throw new Error("Report note is too long.");
     const rows = await ctx.db
       .query("reports")
       .withIndex("by_investigation", (q) => q.eq("investigationId", inv._id))
@@ -854,6 +920,7 @@ export const updateCaseReportDraft = mutation({
     const now = Date.now();
     await ctx.db.patch(report._id, {
       draftNarrative: args.narrative.trim(),
+      draftNote: args.note?.trim() ?? "",
       excludedEvidenceIds: args.excludedEvidenceIds.slice(0, 300),
       excludedTacticKeys: args.excludedTacticKeys.slice(0, 300),
       redactSensitive: args.redactSensitive,

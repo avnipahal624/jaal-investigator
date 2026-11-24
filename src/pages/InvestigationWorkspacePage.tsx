@@ -360,7 +360,13 @@ export default function InvestigationWorkspacePage() {
 
       {caseTab !== "overview" && (
         <div className="min-h-0 flex-1 overflow-y-auto p-3 lg:p-4">
-          {caseTab === "voice" && <CaseVoicePanel caseId={investigation.id} focus={voiceFocus} />}
+          {caseTab === "voice" && (
+            <CaseVoicePanel
+              caseId={investigation.id}
+              scenarioKey={investigation.scenarioKey}
+              focus={voiceFocus}
+            />
+          )}
           {caseTab === "board" && (
             <div className="jaal-panel grid h-[72vh] min-h-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_300px]">
               <div className="min-h-0">{board()}</div>
@@ -377,6 +383,10 @@ export default function InvestigationWorkspacePage() {
             <CaseTimelinePanel
               caseId={investigation.id}
               onOpenMessage={openSourceMessage}
+              onOpenVoice={(recordingId, atMs) => {
+                setVoiceFocus({ recordingId, atMs: atMs ?? undefined });
+                setCaseTab("voice");
+              }}
               onOpenView={(view) => setCaseTab(view === "voice" ? "voice" : view)}
             />
           )}

@@ -133,6 +133,21 @@ function preservedEvidenceOf(
   return eviId ? nodeById(graph, eviId) : null;
 }
 
+function nodeReviewStatus(
+  graph: EvidenceGraph,
+  edgeIndex: EdgeIndex,
+  node: GraphNode,
+): string | null {
+  if (node.type === "evidence") return (node.data as GraphEvidenceData).review.status;
+  if (node.type === "indicator") {
+    const preserved = preservedEvidenceOf(graph, edgeIndex, node.id);
+    return preserved
+      ? (preserved.data as GraphEvidenceData).review.status
+      : null;
+  }
+  return null;
+}
+
 /** Catches query failures so the workspace keeps rendering around the board. */
 class GraphBoundary extends Component<
   { children: ReactNode },
@@ -225,6 +240,9 @@ function GraphCanvas({
   });
   const { state } = useJaal();
   const [view, setView] = useState<"board" | "list">(defaultView);
+  const [typeFilter, setTypeFilter] = useState<"all" | GraphNode["type"]>("all");
+  const [reviewFilter, setReviewFilter] = useState<"all" | "reviewed" | "unreviewed">("all");
+  const [search, setSearch] = useState("");
   const [offsets, setOffsets] = useState<Record<string, { x: number; y: number }>>(
     {},
   );
@@ -247,6 +265,25 @@ function GraphCanvas({
     () => (graph ? neighborsOf(graph, selected) : null),
     [graph, selected],
   );
+  const filtered = useMemo(() => {
+    if (!graph || !edgeIndex) return { nodes: [], edges: [], hidden: 0 };
+    const needle = search.trim().toLowerCase();
+    const nodes = graph.nodes.filter((node) => {
+      if (typeFilter !== "all" && node.type !== typeFilter) return false;
+      const review = nodeReviewStatus(graph, edgeIndex, node);
+      const isReviewed = review === "confirmed" || review === "incorrect";
+      if (reviewFilter === "reviewed" && !isReviewed) return false;
+      if (reviewFilter === "unreviewed" && isReviewed) return false;
+      if (!needle) return true;
+      return `${node.label} ${nodeDetail(node)}`.toLowerCase().includes(needle);
+    });
+    const ids = new Set(nodes.map((node) => node.id));
+    return {
+      nodes,
+      edges: graph.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to)),
+      hidden: graph.nodes.length - nodes.length,
+    };
+  }, [graph, edgeIndex, typeFilter, reviewFilter, search]);
 
   // Preserve selection across reactive updates (ids are stable) — only drop
   // it when the record genuinely disappears (case reset, deleted evidence).
@@ -399,12 +436,69 @@ function GraphCanvas({
     />
   );
 
+  const filterBar = (
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-jborder/50 bg-jsurface/60 px-2.5 py-1.5">
+      <span className="font-mono text-[8px] uppercase tracking-widest text-jmuted/70">Filter</span>
+      <select
+        value={typeFilter}
+        onChange={(event) => setTypeFilter(event.target.value as "all" | GraphNode["type"])}
+        className="border border-jborder/70 bg-jsurface px-1.5 py-1 font-mono text-[9px] text-jtext outline-none focus:border-jcyan/60"
+        aria-label="Filter by source type"
+      >
+        <option value="all">all sources</option>
+        <option value="message">messages</option>
+        <option value="indicator">identifiers</option>
+        <option value="tactic">tactics</option>
+        <option value="evidence">preserved evidence</option>
+      </select>
+      <select
+        value={reviewFilter}
+        onChange={(event) => setReviewFilter(event.target.value as "all" | "reviewed" | "unreviewed")}
+        className="border border-jborder/70 bg-jsurface px-1.5 py-1 font-mono text-[9px] text-jtext outline-none focus:border-jcyan/60"
+        aria-label="Filter by review status"
+      >
+        <option value="all">all review states</option>
+        <option value="reviewed">reviewed only</option>
+        <option value="unreviewed">unreviewed only</option>
+      </select>
+      <input
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="search identifier or text"
+        className="min-w-0 flex-1 border border-jborder/70 bg-jsurface px-2 py-1 font-mono text-[9px] text-jtext outline-none focus:border-jcyan/60 sm:max-w-56"
+        aria-label="Search board nodes"
+      />
+      <span className="font-mono text-[8px] uppercase tracking-wider text-jmuted/60">
+        {filtered.nodes.length} shown{filtered.hidden > 0 ? ` · ${filtered.hidden} hidden` : ""}
+      </span>
+      {(typeFilter !== "all" || reviewFilter !== "all" || search.trim()) && (
+        <button
+          type="button"
+          onClick={() => {
+            setTypeFilter("all");
+            setReviewFilter("all");
+            setSearch("");
+          }}
+          className="font-mono text-[8px] uppercase tracking-wider text-jcyan hover:underline"
+        >
+          clear
+        </button>
+      )}
+    </div>
+  );
+
   // ---- Table view (fallback for crowded graphs / small screens) ----------
   if (view === "list") {
     return (
       <div className="flex h-full min-h-0 flex-col">
         {toolbar}
+        {filterBar}
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {filtered.nodes.length === 0 && (
+            <p className="p-4 text-[11px] text-jmuted">
+              No node matches these filters. Clear the filters to see the whole case.
+            </p>
+          )}
           <table className="w-full border-collapse text-left">
             <thead className="sticky top-0 z-10 bg-jsurface/95">
               <tr className="border-b border-jborder/60">
@@ -421,7 +515,7 @@ function GraphCanvas({
               </tr>
             </thead>
             <tbody>
-              {[...graph.nodes]
+              {[...filtered.nodes]
                 .sort((a, b) => a.timestamp - b.timestamp)
                 .map((n) => (
                   <tr
@@ -479,11 +573,11 @@ function GraphCanvas({
 
           {/* Edges table — relationship basis stays readable in fallback view */}
           <p className="jaal-label border-t border-jborder/60 bg-jsurface/70 px-3 py-1.5">
-            Relationships ({graph.edges.length})
+            Relationships ({filtered.edges.length})
           </p>
           <table className="w-full border-collapse text-left">
             <tbody>
-              {graph.edges.map((e) => (
+              {filtered.edges.map((e) => (
                 <tr
                   key={e.id}
                   onClick={() => onSelect({ kind: "edge", id: e.id })}
@@ -524,6 +618,7 @@ function GraphCanvas({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {toolbar}
+      {filterBar}
       <div className="jaal-board relative min-h-0 flex-1 overflow-auto">
         <div
           className="relative"
@@ -536,7 +631,7 @@ function GraphCanvas({
             height={layout.height}
             aria-hidden
           >
-            {graph.edges.map((e) => {
+            {filtered.edges.map((e) => {
               const fromNode = positioned[e.from];
               const toNode = positioned[e.to];
               if (!fromNode || !toNode) return null;
@@ -595,7 +690,9 @@ function GraphCanvas({
           </svg>
 
           {/* Nodes */}
-          {Object.values(positioned).map((node) => {
+          {filtered.nodes.map((filteredNode) => {
+            const node = positioned[filteredNode.id];
+            if (!node) return null;
             const record = nodeById(graph, node.id);
             if (!record) return null;
             const isSelected =

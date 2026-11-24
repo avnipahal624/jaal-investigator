@@ -17,6 +17,8 @@ export type ScenarioKey =
 export interface ScenarioTurn {
   text: string;
   stage?: KillChainStageId;
+  /** A claim explicitly made in this synthetic turn, for post-call review. */
+  claim?: string;
 }
 
 export interface ScenarioDefinition {
@@ -25,6 +27,8 @@ export interface ScenarioDefinition {
   title: string;
   description: string;
   badge: string;
+  /** What the simulated decoy is trying to establish. */
+  decoyObjective: string;
   turns: ScenarioTurn[];
 }
 
@@ -36,6 +40,8 @@ export const SCENARIOS: ScenarioDefinition[] = [
     description:
       "A caller claims a parcel in the recipient's name contains contraband and escalates to a fake police officer demanding a refundable verification payment.",
     badge: "Authority impersonation",
+    decoyObjective:
+      "Establish the claimed agency, officer identity, badge reference, payment destination and deadline.",
     turns: [
       {
         text: "Good morning. This is the India Post parcel tracking desk. A parcel registered under your Aadhaar number contains contraband material. Your identity has been flagged.",
@@ -43,6 +49,7 @@ export const SCENARIOS: ScenarioDefinition[] = [
       {
         text: "This is Inspector Anand Kumar, Cyber Crime Division. My badge ID is DEL-4492 and this interaction is being recorded for the case file. Do not disconnect.",
         stage: "authority",
+        claim: "Inspector Anand Kumar · Cyber Crime Division · badge DEL-4492",
       },
       {
         text: "An FIR has already been registered. If you do not cooperate, a non-bailable warrant will be issued and every bank account linked to your PAN will be frozen.",
@@ -65,6 +72,8 @@ export const SCENARIOS: ScenarioDefinition[] = [
     description:
       "A recruiter offers an unusually fast interview, moves the conversation to a messaging app and asks for a registration payment before any employment paperwork.",
     badge: "Fake recruiter",
+    decoyObjective:
+      "Establish the claimed employer and recruiter, the role, the registration fee and where the payment should go.",
     turns: [
       {
         text: "Hi, I found your profile for a work-from-home data role. The package is ₹45,000 per month and the interview is today only. Are you interested?",
@@ -72,6 +81,7 @@ export const SCENARIOS: ScenarioDefinition[] = [
       {
         text: "I'm Priya from TalentBridge Solutions. We recruit for an international client. Please continue on WhatsApp so our HR team can verify you quickly.",
         stage: "authority",
+        claim: "Priya · TalentBridge Solutions · claims to recruit for an unnamed international client",
       },
       {
         text: "Your profile is shortlisted. The slot closes in 20 minutes and there are three other candidates waiting for the same position.",
@@ -94,6 +104,8 @@ export const SCENARIOS: ScenarioDefinition[] = [
     description:
       "A delivery message claims a parcel is held and asks for a small fee through a link, then escalates with a fake support number.",
     badge: "Delivery phishing",
+    decoyObjective:
+      "Establish the claimed courier, consignment reference, fee, tracking link and support number.",
     turns: [
       {
         text: "Your parcel is held at our hub because the address is incomplete. A ₹25 redelivery fee is pending. Track it here: https://parcel-redelivery.example/track",
@@ -101,6 +113,7 @@ export const SCENARIOS: ScenarioDefinition[] = [
       {
         text: "This is customer support for SwiftShip Couriers. Your consignment ID is SS-884129. We attempted delivery twice and the parcel will be returned tomorrow.",
         stage: "authority",
+        claim: "SwiftShip Couriers customer support · consignment SS-884129",
       },
       {
         text: "If the fee is not paid in the next 30 minutes the parcel is returned to the sender and the refund will take 15 working days.",
@@ -123,6 +136,8 @@ export const SCENARIOS: ScenarioDefinition[] = [
     description:
       "A caller claims to be bank support, says the account is compromised and asks for the one-time code to secure it.",
     badge: "OTP theft",
+    decoyObjective:
+      "Establish the claimed bank team, case reference, requested code and the transfer they claim is pending.",
     turns: [
       {
         text: "This is a security alert from your bank. A new device attempted a ₹18,500 transfer from your account. Did you authorise it?",
@@ -130,6 +145,7 @@ export const SCENARIOS: ScenarioDefinition[] = [
       {
         text: "I'm Rohit from the fraud response team. Your case reference is FR-55291. I can block the device, but I need to verify you first.",
         stage: "authority",
+        claim: "Rohit · bank fraud response team · case FR-55291",
       },
       {
         text: "The transfer is still pending. If we don't cancel it in the next five minutes, the money leaves your account and cannot be reversed.",
@@ -152,6 +168,8 @@ export const SCENARIOS: ScenarioDefinition[] = [
     description:
       "A person threatens to share private material unless a payment is made. The demo contains no imagery and the sensitive excerpt is hidden by default.",
     badge: "Coercion",
+    decoyObjective:
+      "Establish the claimed material, the payment demand, the deadline and the claimed deletion promise — without engaging with private content.",
     turns: [
       {
         text: "I have private photos of you. I will send them to your contacts unless you reply.",
@@ -160,6 +178,7 @@ export const SCENARIOS: ScenarioDefinition[] = [
       {
         text: "I know where you work and I have your family's numbers. You have one hour to respond.",
         stage: "fear",
+        claim: "Threatens to contact the recipient's workplace and family",
       },
       {
         text: "Pay ₹20,000 and I will delete everything. Do not tell anyone or I will post the images tonight.",

@@ -5,7 +5,10 @@ import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { modules } from "./test.setup";
 import type { EvidenceReport } from "@/types/report";
-import { filterReportForExport } from "@/services/reportService";
+import {
+  buildPrintableReportHtml,
+  filterReportForExport,
+} from "@/services/reportService";
 
 const FLAGS = {
   tacticDetection: true,
@@ -206,7 +209,40 @@ describe("case timeline, actions and simulation", () => {
     expect(sessions[0]!.currentTurn).toBe(0);
   });
 
-  it("labels a simulation report as simulated and preserves review exclusions", async () => {
+  it("records decoy claims, tactics and indicators without adding turns after ending", async () => {
+    const t = setup();
+    await createCase(t);
+    const created = await t.mutation(api.caseWorkspace.createDecoyCall, {
+      caseId: "JAAL-200",
+      maxTurns: 3,
+    });
+    const sessionId = created.sessionId as Id<"call_sessions">;
+    await t.mutation(api.caseWorkspace.advanceDecoyCall, { sessionId });
+    await t.mutation(api.caseWorkspace.advanceDecoyCall, { sessionId });
+    const inProgress = await t.query(api.caseWorkspace.getCaseCalls, { caseId: "JAAL-200" });
+    const turns = inProgress[0]!.turns as Array<{
+      speaker: string;
+      text: string;
+      claim?: string;
+      tactics?: string[];
+      indicators?: string[];
+    }>;
+    const scammerTurns = turns.filter((turn) => turn.speaker === "scammer");
+    expect(scammerTurns.some((turn) => (turn.tactics?.length ?? 0) > 0)).toBe(true);
+    expect(scammerTurns.some((turn) => turn.indicators?.some((item) => item.startsWith("URL:")))).toBe(true);
+    expect(scammerTurns.some((turn) => Boolean(turn.claim))).toBe(true);
+
+    await t.mutation(api.caseWorkspace.advanceDecoyCall, { sessionId });
+    const ended = await t.query(api.caseWorkspace.getCaseCalls, { caseId: "JAAL-200" });
+    expect(ended[0]!.status).toBe("ended");
+    const endedTurns = ended[0]!.turns as Array<{ speaker: string }>;
+
+    await t.mutation(api.caseWorkspace.advanceDecoyCall, { sessionId });
+    const afterEnd = await t.query(api.caseWorkspace.getCaseCalls, { caseId: "JAAL-200" });
+    expect(afterEnd[0]!.turns).toHaveLength(endedTurns.length);
+  });
+
+  it("labels a simulation report as simulated and preserves review exclusions and a note", async () => {
     const t = setup();
     await createCase(t);
     const report = await t.mutation(api.jaal.generateReport, { caseId: "JAAL-200" });
@@ -215,6 +251,7 @@ describe("case timeline, actions and simulation", () => {
       caseId: "JAAL-200",
       reportId: report.id,
       narrative: "Reviewed narrative.",
+      note: "Call time is approximate; the recording was supplied later.",
       excludedEvidenceIds: ["ev-1"],
       excludedTacticKeys: ["urgency:123"],
       redactSensitive: true,
@@ -222,9 +259,61 @@ describe("case timeline, actions and simulation", () => {
     const draft = await t.query(api.caseWorkspace.getCaseReportDraft, { caseId: "JAAL-200" });
     expect(draft!.simulated).toBe(true);
     expect(draft!.draftNarrative).toBe("Reviewed narrative.");
+    expect(draft!.draftNote).toContain("Call time is approximate");
     expect(draft!.excludedEvidenceIds).toEqual(["ev-1"]);
     expect(draft!.redactSensitive).toBe(true);
     expect(draft!.reviewedAt).toBeGreaterThan(0);
+  });
+
+  it("returns a source-linked audio timeline event for an accepted finding", async () => {
+    const t = setup();
+    await createCase(t);
+    const recordingId = await seedRecording(t, {
+      transcriptSegments: [
+        { startMs: 41_000, endMs: 48_000, text: "Pay the release fee now." },
+      ],
+      analysis: {
+        status: "COMPLETED",
+        findings: [
+          {
+            id: "accepted-timeline",
+            tactic: "Payment request",
+            excerpt: "Pay the release fee now.",
+            explanation: "A payment was requested.",
+            timestampMs: 42_000,
+          },
+          {
+            id: "rejected-timeline",
+            tactic: "Authority claim",
+            excerpt: "I am from support.",
+            explanation: "An identity was claimed.",
+            timestampMs: 10_000,
+          },
+        ],
+      },
+    });
+    await t.mutation(api.caseWorkspace.reviewCaseFinding, {
+      recordingId,
+      findingId: "accepted-timeline",
+      verdict: "accepted",
+    });
+    await t.mutation(api.caseWorkspace.reviewCaseFinding, {
+      recordingId,
+      findingId: "rejected-timeline",
+      verdict: "rejected",
+    });
+    const rows = (await t.query(api.caseWorkspace.getCaseTimeline, {
+      caseId: "JAAL-200",
+    })) as Array<{
+      id: string;
+      recordingId?: string;
+      audioAtMs?: number;
+    }>;
+    const audioFinding = rows.find((row) => row.id.startsWith("voice-finding:"));
+    expect(audioFinding).toBeDefined();
+    expect(audioFinding!.recordingId).toBe(recordingId);
+    expect(audioFinding!.audioAtMs).toBe(42_000);
+    expect(rows.filter((row) => row.id.startsWith("voice-finding:"))).toHaveLength(1);
   });
 });
 
@@ -310,11 +399,29 @@ describe("report export filtering", () => {
 
     const exported = filterReportForExport(report, {
       narrative: "Reviewed narrative.",
+      note: "The original call time is unknown.",
+      actionsCompleted: [
+        {
+          key: "pause-payment",
+          title: "Pause the payment",
+          reason: "Money was requested before verification.",
+          completedAt: 99,
+        },
+      ],
       excludedEvidenceIds: ["removed"],
       excludedTacticKeys: ["fear_threat:10"],
     });
     expect(exported.summary.scenario).toBe("Reviewed narrative.");
+    expect(exported.analystNotes).toContain("The original call time is unknown.");
+    expect(exported.actionsCompleted).toHaveLength(1);
     expect(exported.evidence.map((row) => row.id)).toEqual(["safe"]);
     expect(exported.tactics).toHaveLength(0);
+
+    const printable = buildPrintableReportHtml(exported);
+    expect(printable).toContain("Reviewed narrative.");
+    expect(printable).toContain("The original call time is unknown.");
+    expect(printable).toContain("Pause the payment");
+    expect(printable).toContain("SIMULATION / DEMONSTRATION CASE");
+    expect(printable).not.toContain("private photo");
   });
 });

@@ -16,6 +16,8 @@ type TimelineRow = {
   reviewStatus: string | null;
   sourceId: string;
   messageId: string | null;
+  recordingId?: string | null;
+  audioAtMs?: number | null;
 };
 
 const FILTERS = [
@@ -38,13 +40,20 @@ const fmt = (ms: number) =>
     minute: "2-digit",
   });
 
+const fmtAudio = (ms: number) => {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+};
+
 export function CaseTimelinePanel({
   caseId,
   onOpenMessage,
+  onOpenVoice,
   onOpenView,
 }: {
   caseId: string;
   onOpenMessage: (messageId: string) => void;
+  onOpenVoice: (recordingId: string, atMs?: number | null) => void;
   onOpenView: (view: "voice" | "board" | "actions") => void;
 }) {
   const rows = useQuery(api.caseWorkspace.getCaseTimeline, { caseId }) as TimelineRow[] | undefined;
@@ -106,7 +115,8 @@ export function CaseTimelinePanel({
                 key={row.id}
                 type="button"
                 onClick={() => {
-                  if (row.messageId) onOpenMessage(row.messageId);
+                  if (row.recordingId) onOpenVoice(row.recordingId, row.audioAtMs);
+                  else if (row.messageId) onOpenMessage(row.messageId);
                   else if (row.kind === "audio") onOpenView("voice");
                   else if (row.kind === "action") onOpenView("actions");
                   else if (row.kind === "finding") onOpenView("board");
@@ -141,6 +151,11 @@ export function CaseTimelinePanel({
                       <Clock3 className="size-2.5" />
                       {row.timeUnknown ? "Time unknown" : fmt(row.occurredAt)} · added {fmt(row.addedAt)}
                     </span>
+                    {row.recordingId && (
+                      <span className="text-jcyan">
+                        audio source {typeof row.audioAtMs === "number" ? `@ ${fmtAudio(row.audioAtMs)}` : "start"} →
+                      </span>
+                    )}
                     {row.timeUnknown && <span className="text-jamber">original event time unknown</span>}
                   </span>
                 </span>

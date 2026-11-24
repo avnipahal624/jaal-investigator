@@ -261,6 +261,8 @@ const schema = defineSchema(
       simulated: v.boolean(),
       /** Human-reviewed report draft; source evidence is never mutated. */
       draftNarrative: v.optional(v.string()),
+      /** Optional investigator note kept with the reviewed export. */
+      draftNote: v.optional(v.string()),
       excludedEvidenceIds: v.optional(v.array(v.string())),
       excludedTacticKeys: v.optional(v.array(v.string())),
       redactSensitive: v.optional(v.boolean()),

@@ -97,6 +97,13 @@ export interface EvidenceReport {
     hashAlgorithm?: string | null;
   }[];
   analystNotes: string;
+  /** Actions a person marked complete; never inferred by JAAL. */
+  actionsCompleted?: {
+    key: string;
+    title: string;
+    reason: string;
+    completedAt: number;
+  }[];
   /** Version assigned when this report was persisted (v1, v2, …). */
   reportVersion?: number;
   /** Algorithm used for every evidence baseline in this report. */

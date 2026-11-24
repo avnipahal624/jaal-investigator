@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useJaal } from "@/state/JaalProvider";
 import type { EvidenceReport } from "@/types/report";
-import { exportReportJson, filterReportForExport } from "@/services/reportService";
+import {
+  exportReportJson,
+  filterReportForExport,
+  printReviewedReport,
+} from "@/services/reportService";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -23,6 +27,7 @@ type Draft = {
   reportData: EvidenceReport;
   simulated: boolean;
   draftNarrative: string | null;
+  draftNote: string | null;
   excludedEvidenceIds: string[];
   excludedTacticKeys: string[];
   redactSensitive: boolean;
@@ -31,39 +36,22 @@ type Draft = {
 
 const SENSITIVE = /intimate|nude|naked|sexual|photo|video|blackmail|extort/i;
 
+type DraftAction = {
+  actionKey: string;
+  title: string;
+  reason: string;
+  status: string;
+  updatedAt?: number;
+};
+
 export function CaseReportPanel({ caseId }: { caseId: string }) {
   const draft = useQuery(api.caseWorkspace.getCaseReportDraft, { caseId }) as Draft | null | undefined;
-  const update = useMutation(api.caseWorkspace.updateCaseReportDraft);
+  const actions = useQuery(api.caseWorkspace.getCaseActions, { caseId }) as
+    | DraftAction[]
+    | undefined;
   const { createReport } = useJaal();
-  const [narrative, setNarrative] = useState("");
-  const [excludedEvidence, setExcludedEvidence] = useState<string[]>([]);
-  const [excludedTactics, setExcludedTactics] = useState<string[]>([]);
-  const [redactSensitive, setRedactSensitive] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!draft) return;
-    setNarrative(draft.draftNarrative ?? draft.reportData.summary.scenario ?? "");
-    setExcludedEvidence(draft.excludedEvidenceIds ?? []);
-    setExcludedTactics(draft.excludedTacticKeys ?? []);
-    setRedactSensitive(draft.redactSensitive ?? true);
-    setCreating(false);
-  }, [draft?.reportId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const visibleEvidence = useMemo(
-    () => (draft?.reportData.evidence ?? []).filter((row) => !excludedEvidence.includes(row.id)),
-    [draft, excludedEvidence],
-  );
-  const sensitiveEvidence = useMemo(
-    () =>
-      (draft?.reportData.evidence ?? []).filter(
-        (row) => SENSITIVE.test(`${row.label} ${row.value}`) && excludedEvidence.includes(row.id),
-      ),
-    [draft, excludedEvidence],
-  );
 
   if (draft === undefined) {
     return (
@@ -103,6 +91,46 @@ export function CaseReportPanel({ caseId }: { caseId: string }) {
     );
   }
 
+  return <ReportEditor key={draft.reportId} caseId={caseId} draft={draft} actions={actions} />;
+}
+
+function ReportEditor({
+  caseId,
+  draft,
+  actions,
+}: {
+  caseId: string;
+  draft: Draft;
+  actions: DraftAction[] | undefined;
+}) {
+  const update = useMutation(api.caseWorkspace.updateCaseReportDraft);
+  const [narrative, setNarrative] = useState(
+    draft.draftNarrative ?? draft.reportData.summary.scenario ?? "",
+  );
+  const [note, setNote] = useState(draft.draftNote ?? "");
+  const [excludedEvidence, setExcludedEvidence] = useState<string[]>(
+    draft.excludedEvidenceIds ?? [],
+  );
+  const [excludedTactics, setExcludedTactics] = useState<string[]>(
+    draft.excludedTacticKeys ?? [],
+  );
+  const [redactSensitive, setRedactSensitive] = useState(draft.redactSensitive ?? true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const visibleEvidence = useMemo(
+    () => draft.reportData.evidence.filter((row) => !excludedEvidence.includes(row.id)),
+    [draft, excludedEvidence],
+  );
+  const sensitiveEvidence = useMemo(
+    () =>
+      draft.reportData.evidence.filter(
+        (row) => SENSITIVE.test(`${row.label} ${row.value}`) && excludedEvidence.includes(row.id),
+      ),
+    [draft, excludedEvidence],
+  );
+
   const report = draft.reportData;
 
   const save = async () => {
@@ -115,6 +143,7 @@ export function CaseReportPanel({ caseId }: { caseId: string }) {
         caseId,
         reportId: draft.reportId,
         narrative,
+        note,
         excludedEvidenceIds: excludedEvidence,
         excludedTacticKeys: excludedTactics,
         redactSensitive,
@@ -127,9 +156,20 @@ export function CaseReportPanel({ caseId }: { caseId: string }) {
     }
   };
 
+  const completedActions = (actions ?? [])
+    .filter((action) => action.status === "done")
+    .map((action) => ({
+      key: action.actionKey,
+      title: action.title,
+      reason: action.reason,
+      completedAt: action.updatedAt ?? report.generatedAt,
+    }));
+
   const buildExport = (): EvidenceReport =>
     filterReportForExport(report, {
       narrative,
+      note,
+      actionsCompleted: completedActions,
       excludedEvidenceIds: excludedEvidence,
       excludedTacticKeys: excludedTactics,
       redactSensitive,
@@ -178,6 +218,17 @@ export function CaseReportPanel({ caseId }: { caseId: string }) {
             <p className="mt-1 text-[10px] text-jmuted">
               Only the report narrative changes. Source messages and recordings remain untouched.
             </p>
+            <label className="jaal-label mt-3 block" htmlFor="report-note">
+              Investigator note · included with export
+            </label>
+            <textarea
+              id="report-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={3}
+              placeholder="What remains uncertain, and what should the reader know before acting on this report?"
+              className="mt-2 w-full border border-jborder/70 bg-jsurface p-3 text-[11px] leading-relaxed text-jtext outline-none focus:border-jcyan/60"
+            />
           </section>
 
           <section className="jaal-panel p-4">
@@ -267,6 +318,27 @@ export function CaseReportPanel({ caseId }: { caseId: string }) {
               )}
             </div>
           </section>
+
+          <section className="jaal-panel p-4">
+            <h3 className="jaal-label">Voice and call moments</h3>
+            {report.summary.moments.length === 0 ? (
+              <p className="mt-1 text-[11px] text-jmuted">
+                No accepted audio finding is included. Machine transcript moments are not presented as reviewed evidence.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1.5">
+                {report.summary.moments.map((moment, index) => (
+                  <li key={`${moment.label}-${index}`} className="border-l-2 border-jamber/50 pl-2 text-[11px] text-jtext">
+                    <span className="font-mono text-[9px] text-jamber">{moment.label}</span>
+                    <span className="mt-0.5 block text-[10px] text-jmuted">{moment.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-[9px] text-jmuted">
+              These are human-accepted audio findings only. Original recordings remain in the case.
+            </p>
+          </section>
         </div>
 
         <aside className="space-y-3">
@@ -296,6 +368,25 @@ export function CaseReportPanel({ caseId }: { caseId: string }) {
               <p>{report.integrity.hashed} hashed · {report.integrity.mismatched} mismatched</p>
               <p>{report.simulated ? "Labeled as a demonstration case." : "User-supplied case."}</p>
             </div>
+          </section>
+
+          <section className="jaal-panel p-4">
+            <h3 className="jaal-label">Completed actions</h3>
+            <p className="mt-1 text-[10px] text-jmuted">
+              Only actions you marked complete are listed. JAAL never infers completion.
+            </p>
+            {completedActions.length === 0 ? (
+              <p className="mt-2 text-[11px] text-jmuted">No action has been marked complete.</p>
+            ) : (
+              <ul className="mt-2 space-y-1.5">
+                {completedActions.map((action) => (
+                  <li key={action.key} className="border-l-2 border-jgreen/60 pl-2 text-[11px] text-jtext">
+                    {action.title}
+                    <span className="mt-0.5 block text-[10px] text-jmuted">{action.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="jaal-panel p-4">
@@ -337,16 +428,23 @@ export function CaseReportPanel({ caseId }: { caseId: string }) {
               >
                 <Download className="size-3.5" /> Export JSON
               </button>
+              <button
+                type="button"
+                onClick={() => printReviewedReport(buildExport())}
+                className="metal-button-ghost inline-flex items-center gap-2 rounded-sm px-3 py-2 text-[10px]"
+              >
+                <Printer className="size-3.5" /> Print reviewed report
+              </button>
               <Link
                 to={`/reports/${report.id}`}
                 className="metal-button-ghost inline-flex items-center gap-2 rounded-sm px-3 py-2 text-[10px]"
               >
-                <Printer className="size-3.5" /> Open stored report
+                <FileText className="size-3.5" /> Open stored snapshot
               </Link>
             </div>
             <p className="mt-2 text-[9px] leading-relaxed text-jmuted">
-              JSON export applies the exclusions and edited narrative above. The stored report link opens the full
-              snapshot for review and printing.
+              JSON and printable exports apply the exclusions, filtered vocabulary, note and edited narrative above.
+              The stored snapshot link is the full report record and may include material excluded from export.
             </p>
             {saved && (
               <p className="mt-2 flex items-center gap-1.5 text-[10px] text-jgreen">

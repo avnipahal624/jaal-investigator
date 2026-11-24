@@ -31,7 +31,6 @@ import {
   loadSettings,
   manifestCoreBytes,
   maskSensitiveText,
-  MAX_EVIDENCE_PER_CASE,
   MAX_EVENT_DOCS,
   MAX_IMPORT_MESSAGES,
   MAX_MESSAGES_PER_CASE,
@@ -691,7 +690,26 @@ async function generateReportDoc(
     );
     for (const finding of findings) {
       const at = finding.timestampMs;
-      const where = typeof at === "number" ? ` @ ${formatMs(at)}` : "";
+      const segments = (rec.transcriptSegments as
+        | { startMs?: number; endMs?: number; text?: string }[]
+        | null) ?? [];
+      const segmentIndex =
+        typeof at === "number"
+          ? segments.findIndex(
+              (segment) =>
+                typeof segment.startMs === "number" &&
+                typeof segment.endMs === "number" &&
+                at >= segment.startMs &&
+                at <= segment.endMs,
+            )
+          : -1;
+      const segment = segmentIndex >= 0 ? segments[segmentIndex] : undefined;
+      const where =
+        typeof at === "number"
+          ? ` @ ${formatMs(at)}${
+              segment ? `–${formatMs(segment.endMs ?? at)} · segment #${segmentIndex + 1}` : ""
+            }`
+          : "";
       voiceMoments.push({
         timestamp: rec.approximateCallAt ?? rec.createdAt,
         label: `${rec.fileName}${where}`,

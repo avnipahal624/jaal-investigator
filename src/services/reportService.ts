@@ -186,6 +186,8 @@ export function filterReportForExport(
   report: EvidenceReport,
   options: {
     narrative?: string;
+    note?: string;
+    actionsCompleted?: EvidenceReport["actionsCompleted"];
     excludedEvidenceIds?: string[];
     excludedTacticKeys?: string[];
     redactSensitive?: boolean;
@@ -198,6 +200,10 @@ export function filterReportForExport(
   return {
     ...report,
     description: narrative,
+    analystNotes: options.note?.trim()
+      ? `${report.analystNotes}\n\nInvestigator note: ${options.note.trim()}`
+      : report.analystNotes,
+    actionsCompleted: options.actionsCompleted ?? report.actionsCompleted ?? [],
     summary: {
       ...report.summary,
       scenario: narrative,
@@ -233,4 +239,127 @@ export function exportReportJson(report: EvidenceReport): void {
 /** Trigger the browser print dialog for the printable report view. */
 export function printReport(): void {
   window.print();
+}
+
+const escapeHtml = (value: unknown): string =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const fmtDate = (timestamp: number): string =>
+  new Date(timestamp).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+/**
+ * Build a self-contained, printable copy of the filtered report. Only the
+ * report data passed in is rendered, so exclusions and sensitive filtering
+ * applied by `filterReportForExport` are preserved in the printed document.
+ */
+export function buildPrintableReportHtml(report: EvidenceReport): string {
+  const evidence = report.evidence
+    .map(
+      (row) => `<tr><td>${escapeHtml(row.label)}</td><td>${escapeHtml(row.value)}</td><td>${escapeHtml(
+        row.sourceMessageNumber ? `message #${row.sourceMessageNumber}` : row.id.startsWith("voice:") ? "recording finding" : "not linked",
+      )}</td><td>${escapeHtml(row.hashStatus)}</td></tr>`,
+    )
+    .join("");
+  const tactics = report.tactics
+    .map(
+      (row) => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.sourceText)}</td><td>${escapeHtml(
+        row.messageNumber ? `message #${row.messageNumber}` : "source unavailable",
+      )}</td></tr>`,
+    )
+    .join("");
+  const indicators = report.evidence
+    .map(
+      (row) => `<li><strong>${escapeHtml(row.label)}</strong>: ${escapeHtml(row.value)} — ${escapeHtml(
+        row.sourceMessageNumber ? `source message #${row.sourceMessageNumber}` : "source link unavailable",
+      )}</li>`,
+    )
+    .join("");
+  const moments = report.summary.moments
+    .map(
+      (moment) => `<li><strong>${escapeHtml(moment.label)}</strong> — ${escapeHtml(moment.text)}</li>`,
+    )
+    .join("");
+  const timeline = report.timeline
+    .map(
+      (event) => `<li><span>${escapeHtml(fmtDate(event.timestamp))}</span> ${escapeHtml(event.title)} — ${escapeHtml(event.detail)}</li>`,
+    )
+    .join("");
+  const actions = (report.actionsCompleted ?? [])
+    .map((action) => `<li><strong>${escapeHtml(action.title)}</strong> — ${escapeHtml(action.reason)} <em>(${escapeHtml(fmtDate(action.completedAt))})</em></li>`)
+    .join("");
+  const limits = report.unknowns.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const integrity = report.verification
+    .map(
+      (row) => `<tr><td>${escapeHtml(row.label)}</td><td>${escapeHtml(row.status)}</td><td class="mono">${escapeHtml(row.hash ?? "—")}</td></tr>`,
+    )
+    .join("");
+
+  return `<!doctype html>
+<html><head><meta charset="utf-8" /><title>${escapeHtml(report.id)} — ${escapeHtml(report.title)}</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: Georgia, "Times New Roman", serif; color: #132033; margin: 32px; line-height: 1.5; }
+  h1, h2, h3 { font-family: Helvetica, Arial, sans-serif; color: #0b2b45; }
+  h1 { font-size: 24px; margin: 0 0 4px; border-bottom: 3px solid #0b6e8f; padding-bottom: 10px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; margin-top: 26px; border-bottom: 1px solid #b9d4df; padding-bottom: 5px; }
+  .meta, .mono { font-family: "Courier New", monospace; font-size: 10px; color: #526577; }
+  .banner { border: 1px solid #b9791c; background: #fff7e8; color: #704300; padding: 8px 12px; margin: 16px 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 11px; margin-top: 8px; }
+  th, td { border: 1px solid #c9d7df; padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: #eef5f8; font-family: Helvetica, Arial, sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+  ul { padding-left: 20px; font-size: 11px; }
+  .note { border-left: 3px solid #0b6e8f; padding: 4px 12px; font-size: 11px; color: #33485c; }
+  @media print { body { margin: 16mm; } h2 { page-break-after: avoid; } tr { page-break-inside: avoid; } }
+</style></head><body>
+  <p class="mono">JAAL INVESTIGATOR · REVIEWED CASE REPORT</p>
+  <h1>${escapeHtml(report.title)}</h1>
+  <p class="meta">${escapeHtml(report.id)} · ${escapeHtml(report.caseId)} · generated ${escapeHtml(fmtDate(report.generatedAt))} · version ${escapeHtml(report.reportVersion ?? 1)}</p>
+  ${report.simulated ? '<p class="banner">SIMULATION / DEMONSTRATION CASE — synthetic messages and identifiers. No real person, organisation or payment destination was contacted.</p>' : '<p class="banner">USER-SUPPLIED EVIDENCE CASE — hashes prove content integrity only, not authorship or legal admissibility.</p>'}
+  <h2>1. Case information</h2>
+  <p>${escapeHtml(report.description)}</p>
+  <p class="meta">Category: ${escapeHtml(report.category)} · status: ${escapeHtml(report.status)} · current stage: ${escapeHtml(report.currentStage)} · prepared by: ${escapeHtml(report.generatedBy)}</p>
+  <h2>2. Incident summary</h2>
+  <p>${escapeHtml(report.summary.scenario)}</p>
+  <h2>3. Chronological timeline</h2>
+  <ul>${timeline || "<li>No timeline events.</li>"}</ul>
+  <h2>4. Key source evidence</h2>
+  <table><thead><tr><th>Finding</th><th>Value</th><th>Source</th><th>Integrity</th></tr></thead><tbody>${evidence || '<tr><td colspan="4">No evidence rows included.</td></tr>'}</tbody></table>
+  <h2>5. Indicators</h2>
+  <ul>${indicators || "<li>No indicators included.</li>"}</ul>
+  <h2>6. Tactics and supporting sources</h2>
+  <table><thead><tr><th>Tactic</th><th>Supporting text</th><th>Source</th></tr></thead><tbody>${tactics || '<tr><td colspan="3">No tactics included.</td></tr>'}</tbody></table>
+  <h2>7. Voice and call moments</h2>
+  <ul>${moments || "<li>No reviewed voice moments included.</li>"}</ul>
+  <h2>8. Actions marked complete</h2>
+  <ul>${actions || "<li>No action was marked complete by a person.</li>"}</ul>
+  <h2>9. Evidence integrity</h2>
+  <p class="meta">${report.integrity.collected} collected · ${report.integrity.hashed} hashed · ${report.integrity.verified} verified · ${report.integrity.mismatched} mismatched · ${report.integrity.unhashed} unhashed</p>
+  <table><thead><tr><th>Evidence</th><th>Status</th><th>Hash</th></tr></thead><tbody>${integrity || '<tr><td colspan="3">No hash records.</td></tr>'}</tbody></table>
+  <h2>10. Limits and unverified claims</h2>
+  <ul>${limits || "<li>No additional limitations recorded.</li>"}</ul>
+  <p class="note"><strong>Analyst note:</strong> ${escapeHtml(report.analystNotes || "No analyst note recorded.")}</p>
+  <p class="meta">JAAL does not submit reports to authorities or organisations, contact banks, freeze accounts, or remove content. Hashes verify content integrity only.</p>
+</body></html>`;
+}
+
+/** Open a print-ready, filtered report in a new window and invoke printing. */
+export function printReviewedReport(report: EvidenceReport): void {
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.opener = null;
+  win.document.write(buildPrintableReportHtml(report));
+  win.document.close();
+  win.focus();
+  window.setTimeout(() => win.print(), 250);
 }
